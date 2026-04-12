@@ -1061,110 +1061,96 @@ async function decodePhoto(){
   btn.disabled=false; btn.textContent='🔍 Read Barcode';
 }
 
-// ══ LIVE CAMERA SCANNER (ZXing — iPhone Safari + Android Chrome) ══════════
-let mediaStream=null, animFrame=null, scanning=false, zxingReader=null, torchOn=false;
-
-function getZxingReader() {
-  if (zxingReader) return zxingReader;
-  const hints = new Map();
-  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-    ZXing.BarcodeFormat.UPC_A,  ZXing.BarcodeFormat.UPC_E,
-    ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
-  ]);
-  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-  zxingReader = new ZXing.MultiFormatReader();
-  zxingReader.setHints(hints);
-  return zxingReader;
-}
+// ══ LIVE CAMERA SCANNER (ZXingBrowser — works on iPhone Safari + Android) ══
+let codeReader = null, scanning = false, torchOn = false, mediaStream = null;
 
 async function startScanner() {
   try {
-    // Request camera with continuous autofocus
-    const constraints = {
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 1920 },
-        height: { ideal: 1080 },
-        focusMode: { ideal: 'continuous' },
-        advanced: [{ focusMode: 'continuous' }]
-      }
-    };
-    mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-
-    // Apply continuous autofocus via track settings if supported
-    const track = mediaStream.getVideoTracks()[0];
-    if (track && track.applyConstraints) {
-      try {
-        await track.applyConstraints({
-          advanced: [{ focusMode: 'continuous' }]
-        });
-      } catch(e) { /* not supported on all devices — that's fine */ }
+    // Use ZXingBrowser.BrowserMultiFormatReader — handles iPhone video stream natively
+    if (!codeReader) {
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,  ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+      ]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      codeReader = new ZXing.BrowserMultiFormatReader(hints, {
+        delayBetweenScanAttempts: 200,
+        delayBetweenScanSuccess: 500,
+      });
     }
 
-    const v = document.getElementById('scanner-video');
-    v.srcObject = mediaStream;
-    await v.play();
+    const videoEl = document.getElementById('scanner-video');
     document.getElementById('video-wrap').classList.add('active');
     document.getElementById('scanner-idle').style.display = 'none';
     document.getElementById('scan-status-bar').classList.add('active');
+    scanning = true;
 
-    // Show torch button only if supported
+    // Get stream separately so we can access torch
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 }, height: { ideal: 720 },
+      }
+    });
+    videoEl.srcObject = mediaStream;
+    await videoEl.play();
+
+    // Apply continuous autofocus where supported
+    const track = mediaStream.getVideoTracks()[0];
+    try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch(e) {}
+
+    // Show torch if device supports it
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     const torchBtn = document.getElementById('torch-btn');
-    if (torchBtn) torchBtn.style.display = caps.torch ? 'block' : 'none';
+    if (torchBtn) torchBtn.style.display = caps.torch ? 'flex' : 'none';
 
-    scanning = true;
-    torchOn = false;
-    scanLoop(v, track);
+    // Scan loop — reads from the video element directly
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const reader = new ZXing.MultiFormatReader();
+    const hintMap = new Map();
+    hintMap.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,  ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128,
+    ]);
+    hintMap.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    reader.setHints(hintMap);
+
+    let lastScan = 0;
+    const tick = () => {
+      if (!scanning) return;
+      requestAnimationFrame(tick);
+      const now = performance.now();
+      if (now - lastScan < 250) return; // scan every 250ms — enough for autofocus
+      lastScan = now;
+      if (videoEl.readyState < 2 || !videoEl.videoWidth) return;
+
+      // Crop center region matching the scan box overlay
+      const vw = videoEl.videoWidth, vh = videoEl.videoHeight;
+      const cx = Math.floor(vw * 0.1), cy = Math.floor(vh * 0.2);
+      const cw = Math.floor(vw * 0.8), ch = Math.floor(vh * 0.6);
+      canvas.width = cw; canvas.height = ch;
+      ctx.drawImage(videoEl, cx, cy, cw, ch, 0, 0, cw, ch);
+
+      try {
+        const imgData = ctx.getImageData(0, 0, cw, ch);
+        const lum = new ZXing.RGBLuminanceSource(imgData.data, cw, ch);
+        const bin = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+        const result = reader.decode(bin);
+        stopScanner();
+        lookupBarcode(result.getText());
+      } catch(e) { /* keep scanning */ }
+    };
+    requestAnimationFrame(tick);
+
   } catch(e) {
-    showToast('Camera denied — allow camera access in Settings', 'err');
+    console.error(e);
+    stopScanner();
+    showToast('Camera access denied — check Settings > Safari > Camera', 'err');
   }
-}
-
-function scanLoop(v, track) {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const reader = getZxingReader();
-  let lastAttempt = 0;
-  const SCAN_INTERVAL = 150; // ms between decode attempts — gives camera time to refocus
-
-  const tick = (timestamp) => {
-    if (!scanning) return;
-    animFrame = requestAnimationFrame(tick);
-
-    // Throttle attempts
-    if (timestamp - lastAttempt < SCAN_INTERVAL) return;
-    lastAttempt = timestamp;
-
-    if (v.readyState !== v.HAVE_ENOUGH_DATA) return;
-
-    const vw = v.videoWidth, vh = v.videoHeight;
-    if (!vw || !vh) return;
-
-    // Scan CENTER CROP (middle 70% width, middle 50% height)
-    // This is where the scan frame box is — forces focus on barcode area
-    const cropX = Math.floor(vw * 0.15);
-    const cropY = Math.floor(vh * 0.25);
-    const cropW = Math.floor(vw * 0.70);
-    const cropH = Math.floor(vh * 0.50);
-
-    canvas.width  = cropW;
-    canvas.height = cropH;
-    ctx.drawImage(v, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-    try {
-      const imgData = ctx.getImageData(0, 0, cropW, cropH);
-      const lum = new ZXing.RGBLuminanceSource(imgData.data, cropW, cropH);
-      const bin = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
-      const result = reader.decode(bin);
-      // Got one!
-      stopScanner();
-      lookupBarcode(result.getText());
-    } catch(e) { /* no barcode yet */ }
-  };
-
-  animFrame = requestAnimationFrame(tick);
 }
 
 async function toggleTorch() {
@@ -1176,23 +1162,24 @@ async function toggleTorch() {
     await track.applyConstraints({ advanced: [{ torch: torchOn }] });
     const btn = document.getElementById('torch-btn');
     if (btn) {
-      btn.textContent = torchOn ? '🔦 Torch On' : '🔦 Torch';
-      btn.style.background = torchOn ? 'var(--amber)' : '';
-      btn.style.color = torchOn ? '#fff' : '';
+      btn.innerHTML = torchOn ? '🔦 On' : '🔦';
+      btn.style.background = torchOn ? 'var(--amber)' : 'var(--bg)';
+      btn.style.color = torchOn ? '#fff' : 'var(--ink)';
     }
-  } catch(e) { showToast('Torch not supported on this device', 'err'); }
+  } catch(e) { showToast('Torch not available', 'err'); }
 }
 
 function stopScanner() {
   scanning = false;
-  torchOn = false;
-  if (animFrame) cancelAnimationFrame(animFrame);
   if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (codeReader) { try { codeReader.reset(); } catch(e) {} }
+  const v = document.getElementById('scanner-video');
+  if (v) { v.srcObject = null; }
   document.getElementById('video-wrap').classList.remove('active');
   document.getElementById('scanner-idle').style.display = 'flex';
   document.getElementById('scan-status-bar').classList.remove('active');
-  const torchBtn = document.getElementById('torch-btn');
-  if (torchBtn) { torchBtn.style.display = 'none'; torchBtn.textContent = '🔦 Torch'; }
+  const tb = document.getElementById('torch-btn');
+  if (tb) { tb.style.display = 'none'; tb.innerHTML = '🔦'; torchOn = false; }
 }
 
 // ══ FOOD LOOKUP (Open Food Facts) ══════════════════════════════════════════
@@ -1334,40 +1321,14 @@ async function analyzeMeal(){
   document.getElementById('ai-result').classList.remove('show');
   document.getElementById('ai-loading').classList.add('show');
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',max_tokens:1200,
-        messages:[{role:'user',content:`You are a nutrition expert who knows the WW (Weight Watchers) PersonalPoints system for 2024-2025.
-
-ZEROPOINT FOODS (always 0 pts):
-- ALL whole fruits (fresh/frozen, NO added sugar — fruit juice, dried fruit, applesauce are NOT zero)
-- ALL vegetables including potatoes, sweet potatoes, corn, peas
-- Whole eggs (any style — scrambled, fried, boiled, omelette)
-- Chicken breast, chicken thighs (skinless/plain), turkey breast, turkey thighs (skinless/plain)
-- All plain fish and seafood (NOT breaded, fried, or in sauces)
-- Plain rolled oats / steel-cut oats / oatmeal (NOT flavored packets, granola, or oat bars)
-- ONLY plain nonfat/fat-free yogurt with no added sugar (plain nonfat Greek yogurt IS zero; Chobani fruit flavors, vanilla, honey — NOT zero)
-- ONLY plain nonfat cottage cheese (NOT low-fat 2%, NOT flavored)
-- Tofu, tempeh, edamame
-- All beans, lentils, chickpeas (plain — NOT bean dip, hummus, refried beans)
-
-NOT ZERO (these have points): flavored yogurt of any kind, low-fat (2%) dairy, fruit juice, dried fruit, granola, oat bars, flavored oatmeal, processed meats, breaded/fried proteins, chips, crackers, bread, rice, pasta, cheese, butter, oil, nuts, peanut butter, alcohol, soda, juice.
-
-WW formula for non-zero foods:
-Points = (calories × 0.0305) + (sat_fat_g × 0.275) + (sugar_g × 0.12) - (protein_g × 0.098) - (fiber_g × 0.098)
-Min 0, round to nearest integer.
-
-User ate: "${text}"
-
-For each item: identify if truly ZeroPoint per above rules, otherwise estimate nutrition and calculate points.
-Return ONLY valid JSON (no markdown):
-{"mealLabel":"short name","totalPoints":number,"items":[{"name":"item description","isZero":boolean,"calories":number,"protein":number,"saturatedFat":number,"sugar":number,"fiber":number,"points":number,"note":"brief note"}]}`}]
-      })
+    const res = await fetch('/api/ai-meal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mealText: text })
     });
-    const data=await res.json();
-    const raw=data.content?.find(b=>b.type==='text')?.text||'';
-    currentAiMeal=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    if (!res.ok) throw new Error(await res.text());
+    currentAiMeal = await res.json();
+    if (currentAiMeal.error) throw new Error(currentAiMeal.error);
     renderAiResult(currentAiMeal);
   }catch{
     showToast('AI estimation failed','err');
