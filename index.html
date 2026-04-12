@@ -393,18 +393,43 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 
 <!-- ══════════ SCAN ══════════ -->
 <div class="screen" id="screen-scan">
-  <div class="page-header"><h2>Scan Barcode</h2><p>Point camera at any product barcode</p></div>
+  <div class="page-header"><h2>Scan Barcode</h2><p id="scan-subtitle">Loading…</p></div>
   <div class="scan-content">
 
-    <!-- Live scanner (HTTPS required — works on Netlify/Vercel) -->
-    <div class="live-scanner-card" style="display:block">
-      <div id="video-wrap"><video id="scanner-video" autoplay muted playsinline webkit-playsinline x-webkit-airplay="deny"></video><div class="scan-overlay"><div class="scan-frame"><div class="scan-line"></div></div></div></div>
-      <div class="scanner-idle-inner" id="scanner-idle"><div style="font-size:2.2rem">🔍</div><div style="font-size:.82rem;color:var(--ink2);text-align:center">Point camera at barcode</div><button class="scan-start-btn" onclick="startScanner()">Open Camera</button></div>
-      <div class="scan-status-bar" id="scan-status-bar">
-        <span style="font-size:.78rem;color:var(--ink2)">Hold steady over barcode…</span>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button id="torch-btn" onclick="toggleTorch()" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.72rem;font-weight:700;color:var(--ink);cursor:pointer;">🔦 Torch</button>
-          <button class="scan-stop-btn" onclick="stopScanner()">Stop</button>
+    <!-- Android: Live camera scanner -->
+    <div id="android-scanner" style="display:none">
+      <div class="live-scanner-card" style="display:block">
+        <div id="video-wrap"><video id="scanner-video" autoplay muted playsinline webkit-playsinline></video><div class="scan-overlay"><div class="scan-frame"><div class="scan-line"></div></div></div></div>
+        <div class="scanner-idle-inner" id="scanner-idle">
+          <div style="font-size:2.2rem">🔍</div>
+          <div style="font-size:.82rem;color:var(--ink2);text-align:center">Point camera at barcode</div>
+          <button class="scan-start-btn" onclick="startScanner()">Open Camera</button>
+        </div>
+        <div class="scan-status-bar" id="scan-status-bar">
+          <span style="font-size:.78rem;color:var(--ink2)">Hold steady over barcode…</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="torch-btn" onclick="toggleTorch()" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.72rem;font-weight:700;color:var(--ink);cursor:pointer;">🔦 Torch</button>
+            <button class="scan-stop-btn" onclick="stopScanner()">Stop</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- iPhone/Safari: Photo capture (native camera → decode still image) -->
+    <div id="ios-scanner" style="display:none">
+      <div class="capture-card">
+        <div class="capture-idle" id="capture-idle">
+          <div class="capture-idle-icon">📸</div>
+          <div class="capture-idle-txt">Tap below to open camera.<br>Point at the barcode and snap a photo — it reads instantly.</div>
+          <input type="file" id="barcode-file-input" accept="image/*" capture="environment" onchange="onPhotoSelected(event)"/>
+          <label for="barcode-file-input" class="capture-btn">📷 Scan Barcode</label>
+        </div>
+        <div class="photo-preview" id="photo-preview">
+          <img id="barcode-preview" src="" alt="barcode"/>
+          <div class="preview-btns">
+            <button class="decode-btn" id="decode-btn" onclick="decodePhoto()">🔍 Read Barcode</button>
+            <button class="retake-btn" onclick="retakePhoto()">↩ Retake</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1025,64 +1050,37 @@ function setManualWeekly(){
   renderDay(); showToast(`Weekly allowance: ${n} pts ✓`,'ok');
 }
 
-// ══ PHOTO CAPTURE ════════════════════════════════════════════════════════════
-let capturedImg=null;
-function onPhotoSelected(e){
-  const file=e.target.files[0];if(!file)return;
-  const url=URL.createObjectURL(file);
-  document.getElementById('barcode-preview').src=url;
-  document.getElementById('capture-idle').style.display='none';
-  document.getElementById('photo-preview').classList.add('show');
-  capturedImg=new Image(); capturedImg.src=url;
-}
-function retakePhoto(){
-  document.getElementById('capture-idle').style.display='flex';
-  document.getElementById('photo-preview').classList.remove('show');
-  document.getElementById('barcode-file-input').value='';
-  capturedImg=null;
-}
-async function decodePhoto(){
-  if(!capturedImg)return;
-  const btn=document.getElementById('decode-btn');
-  btn.disabled=true; btn.textContent='⏳ Reading…';
-  try{
-    await new Promise(res=>{if(capturedImg.complete)return res();capturedImg.onload=res;});
-    const hints=new Map();
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39]);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
-    const reader=new ZXing.MultiFormatReader(); reader.setHints(hints);
-    const canvas=document.createElement('canvas');
-    canvas.width=capturedImg.naturalWidth; canvas.height=capturedImg.naturalHeight;
-    canvas.getContext('2d').drawImage(capturedImg,0,0);
-    const imgData=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
-    const result=reader.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.RGBLuminanceSource(imgData.data,canvas.width,canvas.height))));
-    retakePhoto(); await lookupBarcode(result.getText());
-  }catch(e){showToast('Barcode not detected — try better lighting','err');}
-  btn.disabled=false; btn.textContent='🔍 Read Barcode';
-}
+// ══ SCANNER — Auto-detects Android vs iPhone ═══════════════════════════════
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const hasBarcodeDetector = 'BarcodeDetector' in window;
+const useNativeScanner = hasBarcodeDetector && !isIOS;
 
-// ══ LIVE CAMERA SCANNER — Android Chrome + iPhone Safari ══════════════════
-// Strategy: use native BarcodeDetector (Android Chrome) if available,
-// otherwise fall back to ZXing canvas decode (iPhone Safari)
+// Show the right scanner UI on page load
+document.addEventListener('DOMContentLoaded', () => {
+  if (useNativeScanner) {
+    document.getElementById('android-scanner').style.display = 'block';
+    document.getElementById('scan-subtitle').textContent = 'Live camera scanner';
+  } else {
+    document.getElementById('ios-scanner').style.display = 'block';
+    document.getElementById('scan-subtitle').textContent = 'Snap a photo of the barcode';
+  }
+});
+
+// ── Android: Native BarcodeDetector live scanner ──────────────────────────
 let scanning = false, torchOn = false, mediaStream = null, scanRaf = null;
 
 async function startScanner() {
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 1280 },
-        height: { ideal: 720 },
-      }
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
     });
-
     const v = document.getElementById('scanner-video');
+    v.srcObject = mediaStream;
+    await v.play();
 
-    // Autofocus
     const track = mediaStream.getVideoTracks()[0];
     try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch(e) {}
-
-    // Torch
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     const tb = document.getElementById('torch-btn');
     if (tb) tb.style.display = caps.torch ? 'flex' : 'none';
@@ -1092,78 +1090,19 @@ async function startScanner() {
     document.getElementById('scan-status-bar').classList.add('active');
     scanning = true;
 
-    if ('BarcodeDetector' in window) {
-      // Android Chrome — native BarcodeDetector, needs video playing first
-      v.srcObject = mediaStream;
-      v.setAttribute('playsinline', '');
-      await v.play();
-      runNativeScanner(v);
-    } else {
-      // iPhone Safari — let BrowserMultiFormatReader handle the stream directly
-      // Do NOT set srcObject manually — decodeFromStream does it internally
-      runZxingScanner(v);
-    }
-
+    const det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39'] });
+    const tick = async () => {
+      if (!scanning) return;
+      try {
+        const codes = await det.detect(v);
+        if (codes.length) { stopScanner(); lookupBarcode(codes[0].rawValue); return; }
+      } catch(e) {}
+      scanRaf = setTimeout(() => requestAnimationFrame(tick), 200);
+    };
+    requestAnimationFrame(tick);
   } catch(e) {
     stopScanner();
     showToast('Camera denied — allow access in browser settings', 'err');
-  }
-}
-
-// ── Native BarcodeDetector (Android Chrome) ──────────────────────────────
-async function runNativeScanner(v) {
-  let det;
-  try {
-    det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39'] });
-  } catch(e) { runZxingScanner(v); return; }
-
-  const tick = async () => {
-    if (!scanning) return;
-    try {
-      const codes = await det.detect(v);
-      if (codes.length) {
-        stopScanner();
-        lookupBarcode(codes[0].rawValue);
-        return;
-      }
-    } catch(e) {}
-    scanRaf = setTimeout(() => requestAnimationFrame(tick), 300);
-  };
-  requestAnimationFrame(tick);
-}
-
-// ── ZXing BrowserMultiFormatReader (iPhone Safari) ───────────────────────
-// decodeFromVideoElement is the ONLY reliable method on iPhone Safari.
-// It internally handles Safari's video frame timing correctly.
-let browserReader = null;
-
-async function runZxingScanner(v) {
-  try {
-    const hints = new Map();
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-      ZXing.BarcodeFormat.UPC_A,  ZXing.BarcodeFormat.UPC_E,
-      ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
-    ]);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-
-    browserReader = new ZXing.BrowserMultiFormatReader(hints, 500);
-
-    // decodeFromStream uses the existing srcObject stream on the video element
-    // and handles iPhone Safari's video frame timing internally
-    const result = await browserReader.decodeFromStream(mediaStream, v, (res, err) => {
-      if (res) {
-        stopScanner();
-        lookupBarcode(res.getText());
-      }
-      // err is thrown every frame when no barcode found — totally normal, ignore
-    });
-  } catch(e) {
-    if (scanning) {
-      console.error('ZXing error:', e);
-      showToast('Scanner error — try manual entry', 'err');
-      stopScanner();
-    }
   }
 }
 
@@ -1174,26 +1113,78 @@ async function toggleTorch() {
     torchOn = !torchOn;
     await track.applyConstraints({ advanced: [{ torch: torchOn }] });
     const btn = document.getElementById('torch-btn');
-    if (btn) {
-      btn.innerHTML = torchOn ? '🔦 On' : '🔦';
-      btn.style.background = torchOn ? 'var(--amber)' : '';
-      btn.style.color = torchOn ? '#fff' : '';
-    }
+    if (btn) { btn.innerHTML = torchOn ? '🔦 On' : '🔦'; btn.style.background = torchOn ? 'var(--amber)' : ''; btn.style.color = torchOn ? '#fff' : ''; }
   } catch(e) { showToast('Torch not available', 'err'); }
 }
 
 function stopScanner() {
   scanning = false;
-  if (scanRaf) { clearInterval(scanRaf); clearTimeout(scanRaf); cancelAnimationFrame(scanRaf); scanRaf = null; }
-  if (browserReader) { try { browserReader.reset(); } catch(e) {} browserReader = null; }
+  if (scanRaf) { clearTimeout(scanRaf); cancelAnimationFrame(scanRaf); scanRaf = null; }
   if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
   const v = document.getElementById('scanner-video');
   if (v) { try { v.srcObject = null; } catch(e) {} }
-  document.getElementById('video-wrap').classList.remove('active');
-  document.getElementById('scanner-idle').style.display = 'flex';
-  document.getElementById('scan-status-bar').classList.remove('active');
+  const vw = document.getElementById('video-wrap');
+  if (vw) vw.classList.remove('active');
+  const si = document.getElementById('scanner-idle');
+  if (si) si.style.display = 'flex';
+  const sb = document.getElementById('scan-status-bar');
+  if (sb) sb.classList.remove('active');
   const tb = document.getElementById('torch-btn');
   if (tb) { tb.style.display = 'none'; tb.innerHTML = '🔦'; torchOn = false; }
+}
+
+// ── iPhone: Photo capture → ZXing decode still image ─────────────────────
+let capturedImg = null;
+
+function onPhotoSelected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  document.getElementById('barcode-preview').src = url;
+  document.getElementById('capture-idle').style.display = 'none';
+  document.getElementById('photo-preview').classList.add('show');
+  capturedImg = new Image();
+  capturedImg.src = url;
+  // Auto-decode immediately — no need to tap button
+  setTimeout(decodePhoto, 300);
+}
+
+function retakePhoto() {
+  document.getElementById('capture-idle').style.display = 'flex';
+  document.getElementById('photo-preview').classList.remove('show');
+  document.getElementById('barcode-file-input').value = '';
+  capturedImg = null;
+}
+
+async function decodePhoto() {
+  if (!capturedImg) return;
+  const btn = document.getElementById('decode-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Reading…'; }
+  try {
+    await new Promise(res => { if (capturedImg.complete) return res(); capturedImg.onload = res; });
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+    ]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    const reader = new ZXing.MultiFormatReader();
+    reader.setHints(hints);
+    const canvas = document.createElement('canvas');
+    canvas.width = capturedImg.naturalWidth;
+    canvas.height = capturedImg.naturalHeight;
+    canvas.getContext('2d').drawImage(capturedImg, 0, 0);
+    const imgData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    const lum = new ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
+    const bin = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+    const result = reader.decode(bin);
+    retakePhoto();
+    lookupBarcode(result.getText());
+  } catch(e) {
+    showToast('Barcode not detected — try better lighting or angle', 'err');
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 Read Barcode'; }
+  }
 }
 
 // ══ FOOD LOOKUP (Open Food Facts) ══════════════════════════════════════════
