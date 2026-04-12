@@ -1077,9 +1077,6 @@ async function startScanner() {
     });
 
     const v = document.getElementById('scanner-video');
-    v.srcObject = mediaStream;
-    v.setAttribute('playsinline', true);
-    await v.play();
 
     // Autofocus
     const track = mediaStream.getVideoTracks()[0];
@@ -1096,10 +1093,14 @@ async function startScanner() {
     scanning = true;
 
     if ('BarcodeDetector' in window) {
-      // Android Chrome — native, fast
+      // Android Chrome — native BarcodeDetector, needs video playing first
+      v.srcObject = mediaStream;
+      v.setAttribute('playsinline', '');
+      await v.play();
       runNativeScanner(v);
     } else {
-      // iPhone Safari — ZXing canvas decode
+      // iPhone Safari — let BrowserMultiFormatReader handle the stream directly
+      // Do NOT set srcObject manually — decodeFromStream does it internally
       runZxingScanner(v);
     }
 
@@ -1131,47 +1132,39 @@ async function runNativeScanner(v) {
   requestAnimationFrame(tick);
 }
 
-// ── ZXing canvas decode (iPhone Safari + fallback) ────────────────────────
-function runZxingScanner(v) {
-  const hints = new Map();
-  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-    ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
-    ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
-  ]);
-  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-  const reader = new ZXing.MultiFormatReader();
-  reader.setHints(hints);
+// ── ZXing BrowserMultiFormatReader (iPhone Safari) ───────────────────────
+// decodeFromVideoElement is the ONLY reliable method on iPhone Safari.
+// It internally handles Safari's video frame timing correctly.
+let browserReader = null;
 
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+async function runZxingScanner(v) {
+  try {
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,  ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+    ]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
 
-  // Use setInterval instead of requestAnimationFrame —
-  // Safari throttles rAF for canvas/video reads but not setInterval
-  // 600ms gives the iPhone camera enough time to autofocus between attempts
-  setTimeout(() => {
-    // 1.5s warmup before first scan attempt — iPhone needs time to focus
-    if (!scanning) return;
-    scanRaf = setInterval(() => {
-      if (!scanning) { clearInterval(scanRaf); return; }
-      if (!v.videoWidth || !v.videoHeight) return;
-      if (v.readyState < v.HAVE_ENOUGH_DATA) return;
-      if (v.paused || v.ended) return;
+    browserReader = new ZXing.BrowserMultiFormatReader(hints, 500);
 
-      canvas.width = v.videoWidth;
-      canvas.height = v.videoHeight;
-
-      try {
-        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-        const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const lum = new ZXing.RGBLuminanceSource(d.data, canvas.width, canvas.height);
-        const bin = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
-        const result = reader.decode(bin);
+    // decodeFromStream uses the existing srcObject stream on the video element
+    // and handles iPhone Safari's video frame timing internally
+    const result = await browserReader.decodeFromStream(mediaStream, v, (res, err) => {
+      if (res) {
         stopScanner();
-        lookupBarcode(result.getText());
-      } catch(e) { /* NotFoundException — normal, keep going */ }
-    }, 600);
-  }, 1500);
+        lookupBarcode(res.getText());
+      }
+      // err is thrown every frame when no barcode found — totally normal, ignore
+    });
+  } catch(e) {
+    if (scanning) {
+      console.error('ZXing error:', e);
+      showToast('Scanner error — try manual entry', 'err');
+      stopScanner();
+    }
+  }
 }
 
 async function toggleTorch() {
@@ -1192,9 +1185,10 @@ async function toggleTorch() {
 function stopScanner() {
   scanning = false;
   if (scanRaf) { clearInterval(scanRaf); clearTimeout(scanRaf); cancelAnimationFrame(scanRaf); scanRaf = null; }
+  if (browserReader) { try { browserReader.reset(); } catch(e) {} browserReader = null; }
   if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
   const v = document.getElementById('scanner-video');
-  if (v) v.srcObject = null;
+  if (v) { try { v.srcObject = null; } catch(e) {} }
   document.getElementById('video-wrap').classList.remove('active');
   document.getElementById('scanner-idle').style.display = 'flex';
   document.getElementById('scan-status-bar').classList.remove('active');
