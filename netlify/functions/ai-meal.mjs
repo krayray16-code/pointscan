@@ -3,7 +3,11 @@ export default async (req) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const apiKey = Netlify.env.get('ANTHROPIC_API_KEY');
+  // Try both Netlify env and process.env for compatibility
+  const apiKey = (typeof Netlify !== 'undefined' && Netlify.env)
+    ? Netlify.env.get('ANTHROPIC_API_KEY')
+    : process.env.ANTHROPIC_API_KEY;
+
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'API key not configured' }), {
       status: 500, headers: { 'Content-Type': 'application/json' }
@@ -16,31 +20,22 @@ export default async (req) => {
   }
 
   const { mealText } = body;
-  if (!mealText || typeof mealText !== 'string' || mealText.length > 500) {
+  if (!mealText || typeof mealText !== 'string' || mealText.length > 1000) {
     return new Response(JSON.stringify({ error: 'Invalid meal text' }), { status: 400 });
   }
 
-  const prompt = `You are a nutrition expert who knows the WW (Weight Watchers) PersonalPoints system for 2024-2025.
+  const prompt = `You are a nutrition expert who knows WW PersonalPoints 2024-2025.
 
-ZEROPOINT FOODS (always 0 pts):
-- ALL whole fruits (fresh/frozen, NO added sugar — juice/dried fruit NOT zero)
-- ALL vegetables including potatoes, sweet potatoes, corn, peas
-- Whole eggs (any style)
-- Skinless chicken/turkey breast and thighs (plain, not breaded/fried)
-- All plain fish and seafood (not breaded/fried)
-- Plain rolled oats / steel-cut oats (NOT flavored packets or granola)
-- ONLY plain nonfat/fat-free yogurt with no added sugar (Chobani fruit = NOT zero)
-- ONLY plain nonfat cottage cheese
-- Tofu, tempeh, edamame, all plain beans/lentils/chickpeas
+ZEROPOINT (0 pts): all whole fruits, all vegetables (including potato/corn/peas), whole eggs, skinless chicken/turkey, plain fish/seafood, plain oats, plain nonfat yogurt (NO flavor), plain nonfat cottage cheese, tofu, tempeh, edamame, plain beans/lentils.
 
-NOT ZERO: flavored yogurt, 2% dairy, juice, dried fruit, granola, bread, rice, pasta, cheese, butter, oil, nuts, peanut butter, alcohol.
+NOT ZERO: flavored yogurt, 2% dairy, juice, dried fruit, granola, bread, rice, pasta, cheese, butter, oil, nuts, peanut butter, alcohol, soda.
 
-WW formula for non-zero: Points = (cal×0.0305)+(sat_fat×0.275)+(sugar×0.12)-(protein×0.098)-(fiber×0.098). Min 0, round to int.
+WW formula (non-zero): pts = round(max(0, cal*0.0305 + sat_fat*0.275 + sugar*0.12 - protein*0.098 - fiber*0.098))
 
 User ate: "${mealText.replace(/"/g, "'")}"
 
-Return ONLY valid JSON:
-{"mealLabel":"short name","totalPoints":number,"items":[{"name":"item","isZero":boolean,"calories":number,"protein":number,"saturatedFat":number,"sugar":number,"fiber":number,"points":number,"note":"brief"}]}`;
+Reply ONLY with JSON, no markdown:
+{"mealLabel":"name","totalPoints":0,"items":[{"name":"item","isZero":true,"calories":0,"protein":0,"saturatedFat":0,"sugar":0,"fiber":0,"points":0,"note":""}]}`;
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -52,10 +47,17 @@ Return ONLY valid JSON:
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 800,
+        max_tokens: 1024,
         messages: [{ role: 'user', content: prompt }]
       })
     });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return new Response(JSON.stringify({ error: 'Anthropic API error', detail: errText }), {
+        status: 500, headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     const data = await response.json();
     const text = data.content?.find(b => b.type === 'text')?.text || '';
@@ -67,10 +69,10 @@ Return ONLY valid JSON:
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: 'AI request failed', detail: e.message }), {
+    return new Response(JSON.stringify({ error: 'Failed', detail: e.message }), {
       status: 500, headers: { 'Content-Type': 'application/json' }
     });
   }
-}
+};
 
 export const config = { path: '/api/ai-meal' };
