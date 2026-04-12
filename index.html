@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PointScan — WW Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --teal: #00857c;
+  --teal-light: #e0f4f3;
+  --teal-mid: #b2e0dd;
+  --teal-dark: #005f58;
+  --purple: #7c4daa;
+  --purple-light: #f3edf9;
+  --amber: #e07b00;
+  --amber-light: #fff3e0;
+  --red: #d32f2f;
+  --red-light: #fdecea;
+  --green: #2e7d32;
+  --green-light: #e8f5e9;
+  --bg: #f7f7f7;
+  --surface: #ffffff;
+  --border: #e8e8e8;
+  --ink: #1a1a1a;
+  --ink2: #666;
+  --ink3: #999;
+  --radius: 16px;
+  --shadow: 0 2px 16px rgba(0,0,0,0.07);
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.06);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padding-bottom:80px;-webkit-font-smoothing:antialiased;}
+
+/* ── NAV BAR ── */
+.nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0 8px;cursor:pointer;color:var(--ink3);transition:color .2s;gap:3px;-webkit-tap-highlight-color:transparent;}
+.nav-item.active{color:var(--teal);}
+.nav-icon{font-size:1.35rem;line-height:1;}
+.nav-label{font-size:.62rem;font-weight:700;letter-spacing:.03em;}
+
+/* ── SCREENS ── */
+.screen{display:none;min-height:100vh;}
+.screen.active{display:block;}
+
+/* ── PAGE HEADER ── */
+.page-header{background:var(--surface);padding:20px 20px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:40;}
+.page-header h2{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.4rem;color:var(--ink);}
+.page-header p{font-size:.78rem;color:var(--ink2);margin-top:2px;}
+
+/* ── MY DAY ── */
+.day-content{padding:16px;}
+
+/* Points hero */
+.points-hero{background:var(--teal);border-radius:var(--radius);padding:20px;margin-bottom:14px;color:#fff;position:relative;overflow:hidden;}
+.points-hero::before{content:'';position:absolute;top:-30px;right:-30px;width:140px;height:140px;background:rgba(255,255,255,.06);border-radius:50%;}
+.points-hero::after{content:'';position:absolute;bottom:-40px;right:20px;width:100px;height:100px;background:rgba(255,255,255,.04);border-radius:50%;}
+.hero-date{font-size:.72rem;font-weight:700;opacity:.8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;}
+.hero-row{display:flex;gap:0;align-items:stretch;}
+.hero-block{flex:1;text-align:center;position:relative;z-index:1;}
+.hero-block+.hero-block::before{content:'';position:absolute;left:0;top:15%;height:70%;width:1px;background:rgba(255,255,255,.25);}
+.hero-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:2.6rem;line-height:1;}
+.hero-num.zero{color:#a5f3ee;}
+.hero-lbl{font-size:.68rem;font-weight:700;opacity:.75;margin-top:2px;letter-spacing:.04em;text-transform:uppercase;}
+.hero-sub{font-size:.7rem;opacity:.65;margin-top:3px;}
+
+/* Progress bar */
+.prog-bar-wrap{margin-top:14px;position:relative;z-index:1;}
+.prog-bar-track{background:rgba(255,255,255,.2);border-radius:99px;height:8px;overflow:hidden;}
+.prog-bar-fill{height:100%;border-radius:99px;background:#fff;transition:width .5s cubic-bezier(.4,0,.2,1);}
+.prog-bar-fill.warn{background:#ffd54f;}
+.prog-bar-fill.over{background:#ff8a65;}
+.prog-bar-labels{display:flex;justify-content:space-between;margin-top:5px;font-size:.65rem;opacity:.7;}
+
+/* Weekly strip */
+.weekly-strip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+.weekly-strip-title{font-size:.72rem;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+.weekly-days{display:flex;gap:4px;}
+.wday{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.wday-label{font-size:.6rem;color:var(--ink3);font-weight:700;}
+.wday-dot{width:28px;height:28px;border-radius:50%;background:var(--bg);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:var(--ink2);transition:all .3s;}
+.wday-dot.today{border-color:var(--teal);color:var(--teal);}
+.wday-dot.over{background:var(--red-light);border-color:var(--red);color:var(--red);}
+.wday-dot.good{background:var(--teal-light);border-color:var(--teal);color:var(--teal);}
+.wday-dot.perfect{background:var(--teal);border-color:var(--teal);color:#fff;}
+
+/* Weeklies row */
+.weeklies-row{background:var(--purple-light);border:1px solid #d4b8f0;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.weeklies-icon{font-size:1.3rem;}
+.weeklies-info{flex:1;}
+.weeklies-title{font-size:.8rem;font-weight:700;color:var(--purple);}
+.weeklies-sub{font-size:.7rem;color:var(--ink2);margin-top:1px;}
+.weeklies-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.6rem;color:var(--purple);}
+
+/* Quick add bar */
+.quick-add-bar{display:flex;gap:8px;margin-bottom:14px;}
+.qa-btn{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 8px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;-webkit-tap-highlight-color:transparent;}
+.qa-btn:active{background:var(--teal-light);}
+.qa-btn-icon{font-size:1.2rem;}
+.qa-btn-lbl{font-size:.68rem;font-weight:700;color:var(--ink2);margin-top:3px;}
+
+/* Food log */
+.log-section-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;color:var(--ink);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+.log-section-title span{font-size:.7rem;font-weight:600;color:var(--teal);cursor:pointer;}
+.log-empty{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;text-align:center;color:var(--ink3);font-size:.82rem;}
+.log-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-sm);animation:fadeUp .2s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.li-icon{font-size:1.1rem;flex-shrink:0;}
+.li-info{flex:1;min-width:0;}
+.li-name{font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.li-meta{font-size:.68rem;color:var(--ink2);margin-top:2px;}
+.li-pts{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.1rem;color:var(--teal);min-width:36px;text-align:right;}
+.li-pts.zero-pts{color:var(--green);}
+.li-del{background:none;border:none;color:var(--border);cursor:pointer;font-size:.85rem;padding:4px;transition:color .2s;flex-shrink:0;}
+.li-del:hover{color:var(--red);}
+.zero-badge{display:inline-block;background:var(--green);color:#fff;border-radius:20px;font-size:.55rem;font-weight:800;padding:1px 5px;margin-left:4px;vertical-align:middle;letter-spacing:.04em;}
+
+/* ── SCAN SCREEN ── */
+.scan-content{padding:16px;}
+.upgrade-tip{background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:12px;padding:10px 14px;font-size:.75rem;color:var(--teal-dark);line-height:1.5;margin-bottom:14px;display:flex;gap:8px;}
+.upgrade-tip a{color:var(--teal-dark);font-weight:700;}
+
+/* Photo capture */
+.capture-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+.capture-idle{padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;}
+.capture-idle-icon{font-size:2.8rem;animation:breathe 2.5s ease-in-out infinite;}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.capture-idle-txt{font-size:.82rem;color:var(--ink2);line-height:1.5;}
+#barcode-file-input{display:none;}
+.capture-btn{display:inline-block;background:var(--teal);color:#fff;border-radius:99px;padding:12px 28px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;transition:opacity .15s;}
+.capture-btn:active{opacity:.85;}
+.photo-preview{display:none;flex-direction:column;align-items:center;padding:14px;gap:10px;border-top:1px solid var(--border);}
+.photo-preview.show{display:flex;}
+#barcode-preview{width:100%;max-height:200px;object-fit:contain;border-radius:8px;background:var(--bg);}
+.preview-btns{display:flex;gap:8px;width:100%;}
+.decode-btn{flex:1;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:11px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;cursor:pointer;}
+.decode-btn:disabled{opacity:.5;cursor:not-allowed;}
+.retake-btn{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:11px 16px;font-size:.82rem;font-weight:600;color:var(--ink);cursor:pointer;}
+
+/* Live scanner (Vercel) */
+/*
+[VERCEL_SWAP] STEP 1: Delete the .capture-card div above
+[VERCEL_SWAP] STEP 2: Change display:none → display:block on .live-scanner-card
+[VERCEL_SWAP] STEP 3: Uncomment startScanner/stopScanner in JS
+*/
+.live-scanner-card{display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;}
+#video-wrap{position:relative;width:100%;aspect-ratio:4/3;background:#000;display:none;}
+#video-wrap.active{display:block;}
+#scanner-video{width:100%;height:100%;object-fit:cover;}
+.scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.scan-frame{width:70%;aspect-ratio:2.5/1;border:2.5px solid var(--teal);border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);position:relative;}
+.scan-line{position:absolute;left:0;right:0;height:2px;background:var(--teal);animation:scanLine 1.8s ease-in-out infinite;}
+@keyframes scanLine{0%,100%{top:10%}50%{top:85%}}
+.scanner-idle-inner{padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;}
+.scan-start-btn{background:var(--teal);color:#fff;border:none;border-radius:99px;padding:12px 28px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;}
+.scan-stop-btn{background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:.8rem;font-weight:700;cursor:pointer;}
+.scan-status-bar{display:none;padding:10px 16px;border-top:1px solid var(--border);align-items:center;justify-content:space-between;}
+.scan-status-bar.active{display:flex;}
+
+/* Manual entry */
+.input-row{display:flex;gap:8px;margin-bottom:14px;}
+.txt-input{flex:1;background:var(--surface);border:1.5px solid var(--border);border-radius:99px;padding:11px 16px;font-family:'DM Sans',sans-serif;font-size:.9rem;color:var(--ink);outline:none;transition:border-color .2s;}
+.txt-input:focus{border-color:var(--teal);}
+.txt-input::placeholder{color:var(--ink3);}
+.teal-btn{background:var(--teal);color:#fff;border:none;border-radius:99px;padding:11px 18px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;cursor:pointer;white-space:nowrap;}
+.teal-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* Product result card */
+.prod-result{display:none;}
+.prod-result.show{display:block;}
+.prod-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);}
+.prod-top{display:flex;gap:12px;padding:14px;border-bottom:1px solid var(--border);align-items:center;}
+.prod-img{width:56px;height:56px;object-fit:contain;border-radius:8px;background:var(--bg);flex-shrink:0;}
+.prod-img-ph{width:56px;height:56px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0;}
+.prod-name{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;line-height:1.3;}
+.prod-brand{font-size:.7rem;color:var(--ink2);margin-top:2px;}
+.prod-pts-row{display:flex;align-items:center;padding:14px;border-bottom:1px solid var(--border);gap:14px;}
+.prod-pts-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:3.2rem;line-height:1;color:var(--teal);}
+.prod-pts-num.high{color:var(--red);}
+.prod-pts-num.med{color:var(--amber);}
+.prod-pts-num.zero-pts{color:var(--green);}
+.prod-pts-info{flex:1;}
+.prod-pts-lbl{font-size:.78rem;font-weight:700;color:var(--ink2);}
+.prod-serv{font-size:.72rem;color:var(--ink3);margin-top:3px;}
+.prod-zero-msg{background:var(--green-light);border-radius:8px;padding:6px 10px;font-size:.72rem;color:var(--green);font-weight:700;margin-top:6px;}
+.nutr-row{display:flex;padding:12px 14px;gap:0;border-bottom:1px solid var(--border);}
+.nutr-cell{flex:1;text-align:center;border-right:1px solid var(--border);}
+.nutr-cell:last-child{border-right:none;}
+.nutr-val{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;}
+.nutr-key{font-size:.6rem;color:var(--ink2);margin-top:1px;text-transform:uppercase;letter-spacing:.04em;}
+.add-food-row{display:flex;align-items:center;gap:10px;padding:12px 14px;}
+.qty-ctrl{display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--border);border-radius:99px;overflow:hidden;}
+.qty-btn{background:none;border:none;color:var(--ink);font-size:1.2rem;padding:7px 14px;cursor:pointer;}
+.qty-num{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;min-width:26px;text-align:center;}
+.add-log-btn{flex:1;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:12px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.88rem;cursor:pointer;}
+
+/* Deploy card */
+.deploy-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;font-size:.78rem;line-height:1.9;color:var(--ink2);}
+
+/* ── SEARCH SCREEN ── */
+.search-content{padding:16px;}
+.search-hero{margin-bottom:14px;}
+
+/* Zero point banner */
+.zero-banner{display:none;background:var(--green-light);border:1.5px solid var(--green);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:.8rem;color:var(--green);font-weight:700;line-height:1.4;}
+.zero-banner.show{display:block;}
+
+/* Search results */
+.search-results{display:flex;flex-direction:column;gap:8px;}
+.search-empty{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;text-align:center;font-size:.82rem;color:var(--ink3);}
+.sri{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-sm);animation:fadeUp .2s ease;}
+.sri-thumb{width:42px;height:42px;object-fit:contain;border-radius:6px;background:var(--bg);flex-shrink:0;}
+.sri-thumb-ph{width:42px;height:42px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;}
+.sri-info{flex:1;min-width:0;}
+.sri-name{font-size:.83rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sri-brand{font-size:.68rem;color:var(--ink2);margin-top:1px;}
+.sri-cal{font-size:.65rem;color:var(--ink3);margin-top:1px;}
+.sri-pts-col{text-align:center;flex-shrink:0;min-width:44px;}
+.sri-pts-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.6rem;line-height:1;color:var(--teal);}
+.sri-pts-num.zero{color:var(--green);}
+.sri-pts-num.med{color:var(--amber);}
+.sri-pts-num.high{color:var(--red);}
+.sri-pts-lbl{font-size:.56rem;color:var(--ink3);font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.sri-add{background:var(--teal-light);border:1.5px solid var(--teal-mid);color:var(--teal);border-radius:99px;padding:6px 12px;font-size:.72rem;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:background .15s;}
+.sri-add:hover{background:var(--teal);color:#fff;}
+
+/* ── PROGRESS SCREEN ── */
+.progress-content{padding:16px;}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;box-shadow:var(--shadow-sm);}
+.stat-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:2rem;line-height:1;}
+.stat-lbl{font-size:.7rem;color:var(--ink2);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-top:4px;}
+.week-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+.wcc-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;margin-bottom:14px;}
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:80px;}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;}
+.bar-wrap{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;}
+.bar{width:100%;border-radius:6px 6px 0 0;background:var(--teal-mid);transition:height .4s ease;min-height:2px;}
+.bar.today-bar{background:var(--teal);}
+.bar.over-bar{background:var(--red);}
+.bar-day{font-size:.6rem;font-weight:700;color:var(--ink3);}
+.bar-val{font-size:.58rem;font-weight:700;color:var(--ink2);}
+
+.weight-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+.weight-section-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;}
+.weight-log-input{display:flex;gap:8px;margin-bottom:10px;}
+.weight-list{display:flex;flex-direction:column;gap:6px;}
+.weight-entry{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;padding:6px 0;border-bottom:1px solid var(--border);}
+.weight-entry:last-child{border-bottom:none;}
+
+/* ── SETTINGS SCREEN ── */
+.settings-content{padding:16px;}
+.settings-section-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;color:var(--ink);margin-bottom:10px;margin-top:4px;}
+.settings-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+.settings-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
+.settings-row:last-child{border-bottom:none;}
+.settings-row-icon{font-size:1.1rem;width:28px;text-align:center;flex-shrink:0;}
+.settings-row-info{flex:1;}
+.settings-row-label{font-size:.85rem;font-weight:600;}
+.settings-row-sub{font-size:.7rem;color:var(--ink2);margin-top:2px;}
+.settings-row-val{font-family:'Nunito',sans-serif;font-weight:800;font-size:1.1rem;color:var(--teal);}
+.form-label{display:block;font-size:.75rem;font-weight:700;color:var(--ink2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
+.form-input,.form-select{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:.9rem;color:var(--ink);outline:none;transition:border-color .2s;-webkit-appearance:none;}
+.form-input:focus,.form-select:focus{border-color:var(--teal);}
+.select-wrap{position:relative;}
+.select-wrap::after{content:'▾';position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--ink2);pointer-events:none;}
+.form-row{margin-bottom:12px;}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.big-teal-btn{width:100%;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:13px;font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;margin-top:4px;}
+.budget-result-box{display:none;background:var(--teal-light);border:1.5px solid var(--teal);border-radius:12px;padding:16px;margin-top:12px;text-align:center;}
+.budget-result-box.show{display:block;}
+.brb-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:3rem;color:var(--teal);line-height:1;}
+.brb-lbl{font-size:.8rem;font-weight:700;color:var(--teal);margin-top:4px;}
+.brb-sub{font-size:.72rem;color:var(--ink2);margin-top:8px;line-height:1.6;white-space:pre-line;}
+.apply-btn{margin-top:10px;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:10px 22px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;cursor:pointer;}
+
+/* AI Meal (modal-style sheet) */
+.ai-sheet{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+.ai-sheet-header{background:var(--teal);padding:14px 16px;color:#fff;}
+.ai-sheet-header h3{font-family:'Nunito',sans-serif;font-weight:900;font-size:1rem;}
+.ai-sheet-header p{font-size:.72rem;opacity:.8;margin-top:2px;}
+.ai-meal-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.ai-chip{background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:99px;padding:5px 12px;font-size:.72rem;font-weight:600;color:var(--teal-dark);cursor:pointer;transition:background .15s;}
+.ai-chip:active{background:var(--teal-mid);}
+.ai-textarea{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:11px 13px;font-family:'DM Sans',sans-serif;font-size:.88rem;color:var(--ink);resize:none;outline:none;min-height:80px;background:var(--bg);transition:border-color .2s;}
+.ai-textarea:focus{border-color:var(--teal);}
+.ai-textarea::placeholder{color:var(--ink3);}
+.ai-result-wrap{display:none;}
+.ai-result-wrap.show{display:block;margin-top:12px;}
+.ai-result-header{background:var(--amber-light);border:1.5px solid #f5c060;border-radius:12px 12px 0 0;padding:14px 16px;display:flex;align-items:center;gap:12px;}
+.ai-result-pts{font-family:'Nunito',sans-serif;font-weight:900;font-size:2.8rem;color:var(--amber);line-height:1;}
+.air-lbl{font-size:.72rem;font-weight:700;color:var(--amber);}
+.air-name{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;margin-top:2px;}
+.ai-items{background:var(--surface);border:1.5px solid #f5c060;border-top:none;border-radius:0 0 12px 12px;overflow:hidden;}
+.ai-item-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);}
+.ai-item-row:last-child{border-bottom:none;}
+.ai-item-name{flex:1;font-size:.82rem;font-weight:600;}
+.ai-item-cal{font-size:.68rem;color:var(--ink2);margin-top:1px;}
+.ai-item-pts-col{font-family:'Nunito',sans-serif;font-weight:900;font-size:1rem;color:var(--amber);min-width:32px;text-align:right;}
+.ai-add-meal-btn{width:100%;background:var(--amber);color:#fff;border:none;border-radius:99px;padding:12px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.88rem;cursor:pointer;margin-top:10px;}
+.ai-disclaimer{font-size:.68rem;color:var(--ink3);text-align:center;margin-top:6px;font-style:italic;}
+.ai-loading{display:none;padding:24px;text-align:center;}
+.ai-loading.show{display:block;}
+.ai-loading-icon{font-size:2rem;animation:spin2 1.2s ease-in-out infinite;}
+@keyframes spin2{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+.ai-loading-txt{font-size:.78rem;color:var(--ink2);margin-top:8px;}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--ink);color:#fff;border-radius:99px;padding:10px 22px;font-size:.8rem;font-weight:600;z-index:999;transition:all .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+#toast.ok{background:var(--teal);}
+#toast.err{background:var(--red);}
+.spin-sm{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spinSm .6s linear infinite;vertical-align:middle;margin-right:5px;}
+@keyframes spinSm{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ══════════ MY DAY ══════════ -->
+<div class="screen active" id="screen-day">
+  <div class="page-header">
+    <h2>My Day</h2>
+    <p id="day-header-date">Loading…</p>
+  </div>
+  <div class="day-content">
+
+    <!-- Points hero -->
+    <div class="points-hero" id="points-hero">
+      <div class="hero-date" id="hero-date">Today</div>
+      <div class="hero-row">
+        <div class="hero-block">
+          <div class="hero-num" id="hero-used">0</div>
+          <div class="hero-lbl">Used</div>
+        </div>
+        <div class="hero-block">
+          <div class="hero-num zero" id="hero-remain">23</div>
+          <div class="hero-lbl">Remaining</div>
+          <div class="hero-sub">of <span id="hero-budget">23</span> daily</div>
+        </div>
+        <div class="hero-block">
+          <div class="hero-num" id="hero-weeklies">28</div>
+          <div class="hero-lbl">Weeklies</div>
+          <div class="hero-sub">left this week</div>
+        </div>
+      </div>
+      <div class="prog-bar-wrap">
+        <div class="prog-bar-track"><div class="prog-bar-fill" id="prog-bar" style="width:0%"></div></div>
+        <div class="prog-bar-labels"><span>0</span><span id="prog-bar-max">23</span></div>
+      </div>
+    </div>
+
+    <!-- Weekly strip -->
+    <div class="weekly-strip">
+      <div class="weekly-strip-title">
+        <span>This Week</span>
+        <span id="weekly-strip-pts" style="font-size:.75rem;color:var(--teal)"></span>
+      </div>
+      <div class="weekly-days" id="weekly-days"></div>
+    </div>
+
+    <!-- Quick add -->
+    <div class="quick-add-bar">
+      <div class="qa-btn" onclick="switchScreen('scan')">
+        <div class="qa-btn-icon">📷</div>
+        <div class="qa-btn-lbl">Scan</div>
+      </div>
+      <div class="qa-btn" onclick="switchScreen('search')">
+        <div class="qa-btn-icon">🔎</div>
+        <div class="qa-btn-lbl">Search</div>
+      </div>
+      <div class="qa-btn" onclick="switchScreen('ai')">
+        <div class="qa-btn-icon">✨</div>
+        <div class="qa-btn-lbl">AI Meal</div>
+      </div>
+      <div class="qa-btn" onclick="switchScreen('progress')">
+        <div class="qa-btn-icon">📈</div>
+        <div class="qa-btn-lbl">Progress</div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="log-section-title">
+      Today's Food
+      <span onclick="resetDay()">Reset day</span>
+    </div>
+    <div id="log-list"><div class="log-empty">Nothing logged yet.<br>Tap Scan, Search, or AI Meal to add food.</div></div>
+
+  </div>
+</div>
+
+<!-- ══════════ SCAN ══════════ -->
+<div class="screen" id="screen-scan">
+  <div class="page-header"><h2>Scan Barcode</h2><p>Point camera at any product barcode</p></div>
+  <div class="scan-content">
+
+    <!-- Live scanner (HTTPS required — works on Netlify/Vercel) -->
+    <div class="live-scanner-card" style="display:block">
+      <div id="video-wrap"><video id="scanner-video" autoplay muted playsinline></video><div class="scan-overlay"><div class="scan-frame"><div class="scan-line"></div></div></div></div>
+      <div class="scanner-idle-inner" id="scanner-idle"><div style="font-size:2.2rem">🔍</div><div style="font-size:.82rem;color:var(--ink2);text-align:center">Point camera at barcode</div><button class="scan-start-btn" onclick="startScanner()">Open Camera</button></div>
+      <div class="scan-status-bar" id="scan-status-bar">
+        <span style="font-size:.78rem;color:var(--ink2)">Hold steady over barcode…</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="torch-btn" onclick="toggleTorch()" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.72rem;font-weight:700;color:var(--ink);cursor:pointer;">🔦 Torch</button>
+          <button class="scan-stop-btn" onclick="stopScanner()">Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px;font-size:.8rem;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em;">Or Enter Barcode</div>
+    <div class="input-row" style="margin-bottom:14px;">
+      <input class="txt-input" id="manual-barcode" type="tel" placeholder="e.g. 049000028911"/>
+      <button class="teal-btn" onclick="lookupManual()">Look Up</button>
+    </div>
+
+    <div class="prod-result" id="prod-result">
+      <div class="prod-card">
+        <div class="prod-top">
+          <div id="prod-img-wrap"><div class="prod-img-ph">🛒</div></div>
+          <div><div class="prod-name" id="prod-name">—</div><div class="prod-brand" id="prod-brand"></div></div>
+        </div>
+        <div class="prod-pts-row">
+          <div class="prod-pts-num" id="pts-display">—</div>
+          <div class="prod-pts-info">
+            <div class="prod-pts-lbl" id="pts-lbl">WW PersonalPoints™</div>
+            <div class="prod-serv" id="serv-size">—</div>
+            <div class="prod-zero-msg" id="zero-msg" style="display:none">✅ ZeroPoint™ food!</div>
+          </div>
+        </div>
+        <div class="nutr-row">
+          <div class="nutr-cell"><div class="nutr-val" id="n-cal">—</div><div class="nutr-key">Cal</div></div>
+          <div class="nutr-cell"><div class="nutr-val" id="n-sat">—</div><div class="nutr-key">Sat Fat</div></div>
+          <div class="nutr-cell"><div class="nutr-val" id="n-sug">—</div><div class="nutr-key">Sugar</div></div>
+          <div class="nutr-cell"><div class="nutr-val" style="color:var(--teal)" id="n-pro">—</div><div class="nutr-key">Protein</div></div>
+        </div>
+        <div class="add-food-row">
+          <div class="qty-ctrl">
+            <button class="qty-btn" onclick="changeQty(-1)">−</button>
+            <span class="qty-num" id="qty-display">1</span>
+            <button class="qty-btn" onclick="changeQty(1)">+</button>
+          </div>
+          <button class="add-log-btn" onclick="addScanToLog()">Add to Today's Log</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ SEARCH ══════════ -->
+<div class="screen" id="screen-search">
+  <div class="page-header"><h2>Search Foods</h2><p>Find WW points for any food</p></div>
+  <div class="search-content">
+    <div class="input-row search-hero">
+      <input class="txt-input" id="food-search-input" type="text" placeholder="potato, banana, Greek yogurt…" autocomplete="off"/>
+      <button class="teal-btn" id="search-btn" onclick="searchFood()">Search</button>
+    </div>
+    <div class="zero-banner" id="zero-banner"></div>
+    <div id="search-results"><div class="search-empty">Search any food to see its WW points 🥦</div></div>
+  </div>
+</div>
+
+<!-- ══════════ AI MEAL ══════════ -->
+<div class="screen" id="screen-ai">
+  <div class="page-header"><h2>AI Meal Estimator</h2><p>Describe a meal in plain words</p></div>
+  <div style="padding:16px;">
+    <div class="ai-sheet">
+      <div class="ai-sheet-header">
+        <h3>✨ What did you eat?</h3>
+        <p>Type naturally — quantities, descriptions, anything</p>
+      </div>
+      <div style="padding:14px;">
+        <div class="ai-meal-chips">
+          <span class="ai-chip" onclick="setMeal('3 eggs scrambled, half cup non-fat cottage cheese, 1 banana, black coffee')">🍳 Egg breakfast</span>
+          <span class="ai-chip" onclick="setMeal('grilled chicken breast, 1 cup brown rice, steamed broccoli')">🍗 Chicken bowl</span>
+          <span class="ai-chip" onclick="setMeal('2 slices whole wheat toast with peanut butter and honey, 1 apple')">🍞 PB toast</span>
+          <span class="ai-chip" onclick="setMeal('baked potato with non-fat Greek yogurt and chives, side salad')">🥔 Potato meal</span>
+          <span class="ai-chip" onclick="setMeal('non-fat Greek yogurt with mixed berries and 1 tbsp honey')">🫐 Yogurt bowl</span>
+        </div>
+        <textarea class="ai-textarea" id="meal-input" rows="3" placeholder="e.g. 3 eggs, half cup non-fat cottage cheese, a banana and black coffee…"></textarea>
+        <button class="big-teal-btn" id="analyze-btn" onclick="analyzeMeal()" style="margin-top:10px;">✨ Calculate Points</button>
+      </div>
+    </div>
+
+    <div class="ai-loading" id="ai-loading">
+      <div class="ai-loading-icon">🤔</div>
+      <div class="ai-loading-txt">Estimating nutrition and calculating WW points…</div>
+    </div>
+
+    <div class="ai-result-wrap" id="ai-result">
+      <div class="ai-result-header">
+        <div class="ai-result-pts" id="ai-total-pts">—</div>
+        <div><div class="air-lbl">WW PersonalPoints™ (AI Estimate)</div><div class="air-name" id="ai-meal-label">Meal</div></div>
+      </div>
+      <div class="ai-items" id="ai-items"></div>
+      <div class="ai-disclaimer">⚠️ AI estimates — use barcode scan for exact points</div>
+      <button class="ai-add-meal-btn" onclick="addAiMealToLog()">+ Add to Today's Log</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PROGRESS ══════════ -->
+<div class="screen" id="screen-progress">
+  <div class="page-header"><h2>Progress</h2><p>Weekly overview & weight</p></div>
+  <div class="progress-content">
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-num" id="prog-days-tracked" style="color:var(--teal)">0</div>
+        <div class="stat-lbl">Days Tracked</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="prog-weekly-used" style="color:var(--teal)">0</div>
+        <div class="stat-lbl">Pts This Week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="prog-weeklies-left" style="color:var(--purple)">28</div>
+        <div class="stat-lbl">Weeklies Left</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="prog-avg" style="color:var(--teal)">—</div>
+        <div class="stat-lbl">Avg pts/day</div>
+      </div>
+    </div>
+
+    <div class="week-chart-card">
+      <div class="wcc-title">Daily Points — This Week</div>
+      <div class="bar-chart" id="week-bar-chart"></div>
+    </div>
+
+    <div class="weight-section">
+      <div class="weight-section-title">
+        Weight Log
+        <span style="font-size:.72rem;font-weight:600;color:var(--teal)" id="weight-trend"></span>
+      </div>
+      <div class="weight-log-input">
+        <input class="txt-input" type="number" id="weight-input" placeholder="lbs e.g. 182" step="0.1"/>
+        <button class="teal-btn" onclick="logWeight()">Log</button>
+      </div>
+      <div id="weight-list"><div style="font-size:.78rem;color:var(--ink3);text-align:center;padding:10px">No weight entries yet</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ SETTINGS ══════════ -->
+<div class="screen" id="screen-settings">
+  <div class="page-header"><h2>Settings</h2><p>Budget & preferences</p></div>
+  <div class="settings-content">
+
+    <div class="settings-card">
+      <div class="settings-row">
+        <div class="settings-row-icon">🎯</div>
+        <div class="settings-row-info"><div class="settings-row-label">Daily Points Budget</div><div class="settings-row-sub">Current daily allowance</div></div>
+        <div class="settings-row-val" id="s-daily-val">23</div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-icon">📅</div>
+        <div class="settings-row-info"><div class="settings-row-label">Weekly Points</div><div class="settings-row-sub">Extra weekly allowance</div></div>
+        <div class="settings-row-val" id="s-weekly-val">28</div>
+      </div>
+    </div>
+
+    <div class="settings-section-title">Calculate My Budget</div>
+    <div class="settings-card">
+      <div style="padding:16px;">
+        <div class="form-row">
+          <label class="form-label">Biological Sex</label>
+          <div class="select-wrap"><select class="form-select" id="b-sex"><option value="">Select…</option><option value="male">Male</option><option value="female">Female</option></select></div>
+        </div>
+        <div class="form-row form-row-2">
+          <div><label class="form-label">Age</label><input class="form-input" type="number" id="b-age" placeholder="35" min="18"/></div>
+          <div><label class="form-label">Weight (lbs)</label><input class="form-input" type="number" id="b-weight" placeholder="180"/></div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Height</label>
+          <div class="form-row-2"><input class="form-input" type="number" id="b-feet" placeholder="Feet"/><input class="form-input" type="number" id="b-inches" placeholder="Inches"/></div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Activity Level</label>
+          <div class="select-wrap"><select class="form-select" id="b-activity">
+            <option value="1.2">Sedentary</option>
+            <option value="1.375">Lightly active (1–3x/week)</option>
+            <option value="1.55" selected>Moderately active (3–5x/week)</option>
+            <option value="1.725">Very active (6–7x/week)</option>
+            <option value="1.9">Extra active</option>
+          </select></div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Goal</label>
+          <div class="select-wrap"><select class="form-select" id="b-goal">
+            <option value="loss">Lose weight</option>
+            <option value="maintain">Maintain weight</option>
+            <option value="gain">Gain / build muscle</option>
+          </select></div>
+        </div>
+        <button class="big-teal-btn" onclick="calcBudget()">Calculate My Budget</button>
+        <div class="budget-result-box" id="budget-result">
+          <div class="brb-num" id="budget-num">—</div>
+          <div class="brb-lbl">Daily Points Budget</div>
+          <div class="brb-sub" id="budget-sub"></div>
+          <button class="apply-btn" onclick="applyBudget()">✓ Use This Budget</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section-title">Manual Override</div>
+    <div class="settings-card">
+      <div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
+        <div>
+          <label class="form-label">Daily Points Budget</label>
+          <div class="input-row" style="margin:0"><input class="txt-input" type="number" id="manual-daily" placeholder="e.g. 23"/><button class="teal-btn" onclick="setManualBudget()">Set</button></div>
+        </div>
+        <div>
+          <label class="form-label">Weekly Points Allowance</label>
+          <div class="input-row" style="margin:0"><input class="txt-input" type="number" id="manual-weekly" placeholder="e.g. 28"/><button class="teal-btn" onclick="setManualWeekly()">Set</button></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ BOTTOM NAV ══════════ -->
+<nav class="nav">
+  <div class="nav-item active" id="nav-day" onclick="switchScreen('day')"><div class="nav-icon">📋</div><div class="nav-label">My Day</div></div>
+  <div class="nav-item" id="nav-scan" onclick="switchScreen('scan')"><div class="nav-icon">📷</div><div class="nav-label">Scan</div></div>
+  <div class="nav-item" id="nav-search" onclick="switchScreen('search')"><div class="nav-icon">🔎</div><div class="nav-label">Search</div></div>
+  <div class="nav-item" id="nav-ai" onclick="switchScreen('ai')"><div class="nav-icon">✨</div><div class="nav-label">AI Meal</div></div>
+  <div class="nav-item" id="nav-progress" onclick="switchScreen('progress')"><div class="nav-icon">📈</div><div class="nav-label">Progress</div></div>
+  <div class="nav-item" id="nav-settings" onclick="switchScreen('settings')"><div class="nav-icon">⚙️</div><div class="nav-label">Settings</div></div>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+// ══ STATE ══════════════════════════════════════════════════════════════════
+const DB = {
+  get(k, def) { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):def; } catch{return def;} },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch{} }
+};
+
+let dailyBudget   = DB.get('ww_daily_budget', 23);
+let weeklyBudget  = DB.get('ww_weekly_budget', 28);
+let todayKey      = todayStr();
+let weekLog       = DB.get('ww_week_log', {});   // {dateKey: [{id,name,pts,qty,icon,source}]}
+let weeklyUsed    = DB.get('ww_weekly_used', {}); // {weekKey: number}
+let weightLog     = DB.get('ww_weight_log', []);
+let currentProduct= null, currentQty=1, currentAiMeal=null;
+
+function todayStr() {
+  const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function weekKey(dateStr) {
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDay(); // 0=Sun
+  const mon=new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1));
+  return mon.toISOString().slice(0,10);
+}
+function getWeekDates() {
+  const today=new Date(todayKey+'T00:00:00'), day=today.getDay();
+  const mon=new Date(today); mon.setDate(today.getDate()-(day===0?6:day-1));
+  return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d.toISOString().slice(0,10);});
+}
+function todayLog() { return weekLog[todayKey]||[]; }
+function todayPoints() { return todayLog().reduce((s,i)=>s+i.totalPts,0); }
+function weeklyUsedThisWeek() {
+  const wk=weekKey(todayKey);
+  return (weeklyUsed[wk]||0);
+}
+function weekliesLeft() { return Math.max(0, weeklyBudget - weeklyUsedThisWeek()); }
+
+// ══ NAV ════════════════════════════════════════════════════════════════════
+function switchScreen(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  document.getElementById('nav-'+id).classList.add('active');
+  if (id==='day') renderDay();
+  if (id==='progress') renderProgress();
+  window.scrollTo(0,0);
+}
+
+// ══ WW ZEROPOINT LIST (2024/2025 plan) ════════════════════════════════════
+// IMPORTANT: Only PLAIN, NONFAT/FAT-FREE versions of dairy qualify.
+// Flavored, sweetened, or low-fat (not nonfat) do NOT qualify.
+
+// These keywords alone are enough to be zero (fruits/veg/proteins)
+const ZERO_SIMPLE = [
+  // Fruits (whole/frozen, no added sugar)
+  'apple','apricot','banana','blackberr','blueberr','cantaloupe','cherry','clementine',
+  'cranberr','date','fig','grape','grapefruit','guava','honeydew','kiwi','lemon','lime',
+  'lychee','mango','nectarine','orange','papaya','passion fruit','peach','pear',
+  'pineapple','plum','pomegranate','raspberry','strawberr','tangerine','watermelon',
+  // Vegetables (all — updated 2024 includes potatoes)
+  'potato','sweet potato','yam','corn','edamame',
+  'broccoli','spinach','kale','lettuce','cabbage','carrot','cucumber','celery','tomato',
+  'zucchini','squash','eggplant','aubergine','bell pepper','onion','garlic','mushroom',
+  'asparagus','artichoke','beet','radish','turnip','parsnip','leek','chard','arugula',
+  'watercress','cauliflower','brussels sprout','green bean','snap pea','snow pea','okra',
+  'pumpkin','plantain','butternut squash','courgette','fennel','kohlrabi','rutabaga',
+  // Legumes
+  'black bean','kidney bean','pinto bean','cannellini bean','navy bean','lima bean',
+  'split pea','mung bean','adzuki bean','fava bean','soybean','chickpea','lentil',
+  'tofu','tempeh',
+  // Lean proteins
+  'chicken breast','chicken thigh','turkey breast','turkey thigh',
+  'skinless chicken','skinless turkey','ground turkey breast',
+  'tilapia','cod','salmon','tuna','shrimp','scallop','crab','lobster','clam','oyster',
+  'mussel','sardine','halibut','flounder','haddock','trout','catfish','pollock',
+  'mahi','snapper','swordfish','whitefish',
+  // Eggs (whole eggs are ZeroPoint on current 2024/2025 plan)
+  'whole egg','hard boiled egg','hard-boiled egg','soft boiled egg','poached egg',
+  'scrambled egg','fried egg','omelette','omelet','egg white',
+];
+
+// These foods only qualify as zero if the name also contains a "plain/nonfat" qualifier
+const ZERO_REQUIRES_QUALIFIER = ['yogurt','cottage cheese','quark'];
+const ZERO_QUALIFIERS = ['plain','nonfat','non-fat','fat-free','fat free','0%','0 %','skim'];
+
+// These always have points — checked BEFORE zero logic
+const NOT_ZERO = [
+  // Processed/fried potato
+  'french frie','potato chip','hash brown','tater tot','potato wedge',
+  'potato bread','potato roll','potato gnocchi','potato soup','mashed potato mix',
+  // Corn products
+  'corn chip','tortilla chip','corn dog','cornbread','corn muffin','popcorn',
+  // Egg products with other ingredients
+  'egg noodle','egg pasta','egg roll','scotch egg','egg salad','deviled egg',
+  'egg mcmuffin','egg sandwich','egg muffin',
+  // Processed chicken/turkey
+  'chicken nugget','fried chicken','breaded chicken','chicken wing','chicken strip',
+  'chicken finger','chicken tender','chicken sandwich','buffalo chicken',
+  'turkey bacon','turkey jerky','deli turkey','turkey sandwich',
+  // Processed fish
+  'fish stick','fish and chip','breaded fish','fish cake','fish sandwich','fish taco',
+  // Fruit products (not whole fruit)
+  'banana chip','banana bread','banana muffin','banana foster','banana pudding',
+  'dried fruit','fruit juice','fruit snack','fruit candy','fruit leather','fruit roll',
+  'apple juice','apple sauce','applesauce','apple pie','apple crisp',
+  'grape juice','mango juice','orange juice','fruit punch','fruit drink',
+  // Any yogurt that is flavored/sweetened
+  'chobani','dannon','yoplait','oikos','siggi','fage 2','fage total 2',
+  'greek yogurt with','yogurt with','fruit yogurt','flavored yogurt',
+  'vanilla yogurt','honey yogurt','strawberry yogurt','blueberry yogurt',
+  'peach yogurt','cherry yogurt','coconut yogurt','chocolate yogurt',
+  'yogurt parfait','yogurt smoothie','yogurt drink','drinkable yogurt',
+  // Cottage cheese that isn't nonfat
+  '2% cottage','4% cottage','small curd cottage cheese 4','lowfat cottage',
+  // Oat products that aren't plain oats
+  'oat cookie','oat bar','granola','oatmeal cookie','oatmeal raisin',
+  'instant oatmeal','flavored oatmeal','maple oatmeal','brown sugar oatmeal',
+  // Legume products
+  'bean dip','refried bean','hummus','bean soup','bean burrito',
+  // Other
+  'pea protein powder','soy sauce','soy milk','edamame hummus',
+];
+
+function isZeroPoint(name, cats='', sugar=null) {
+  if (!name) return false;
+  const hay = (name + ' ' + (cats||'')).toLowerCase();
+
+  // 1. Never zero if on NOT_ZERO list
+  if (NOT_ZERO.some(x => hay.includes(x))) return false;
+
+  // 2. Never zero if sugar is high (>8g strongly suggests flavored/sweetened)
+  if (sugar != null && sugar > 8) return false;
+
+  // 3. Dairy/yogurt/cottage cheese — ONLY zero if explicitly plain + nonfat
+  if (ZERO_REQUIRES_QUALIFIER.some(f => hay.includes(f))) {
+    const hasQualifier = ZERO_QUALIFIERS.some(q => hay.includes(q));
+    if (!hasQualifier) return false;
+    // Extra check: must also not have flavor indicators
+    const flavorWords = ['vanilla','strawberry','blueberry','peach','honey','maple',
+      'cherry','mango','pineapple','mixed berry','lemon','coconut','caramel',
+      'chocolate','coffee','cinnamon','fruit','flavored','sweetened'];
+    if (flavorWords.some(f => hay.includes(f))) return false;
+    return true;
+  }
+
+  // 4. Oats — only plain oats, not flavored packets
+  if (hay.includes('oat') || hay.includes('oatmeal') || hay.includes('porridge')) {
+    const flavorWords = ['instant','flavored','maple','brown sugar','apple cinnamon',
+      'honey','raisin','cookie','granola','bar','chocolate'];
+    if (flavorWords.some(f => hay.includes(f))) return false;
+    return true;
+  }
+
+  // 5. Simple egg match — needs to be actual eggs, not egg-containing products
+  if (hay.includes('egg')) {
+    const eggProducts = ['egg noodle','egg pasta','egg roll','scotch egg','egg salad',
+      'deviled egg','egg sandwich','egg muffin','egg mcmuffin','egg beater'];
+    if (eggProducts.some(x => hay.includes(x))) return false;
+    // Raw/whole eggs and simple egg dishes are zero
+    if (/\begg(s)?\b/.test(hay) || hay.includes('egg white')) return true;
+    return false;
+  }
+
+  // 6. Simple keyword match for everything else
+  return ZERO_SIMPLE.some(kw => hay.includes(kw));
+}
+
+// ══ WW POINTS FORMULA ══════════════════════════════════════════════════════
+function calcWW(cal, sat, sug, pro, fib, name, cats) {
+  if (isZeroPoint(name, cats, sug)) return 0;
+  if (cal == null) return null;
+  return Math.max(0, Math.round(
+    (cal * 0.0305) + ((sat||0) * 0.275) + ((sug||0) * 0.12)
+    - ((pro||0) * 0.098) - ((fib||0) * 0.098)
+  ));
+}
+
+// ══ DAY RENDER ═════════════════════════════════════════════════════════════
+function renderDay() {
+  todayKey = todayStr();
+  const log = todayLog();
+  const used = todayPoints();
+  const remain = dailyBudget - used;
+  const wkLeft = weekliesLeft();
+
+  // Header date
+  const now = new Date();
+  const opts = {weekday:'long',month:'long',day:'numeric'};
+  document.getElementById('day-header-date').textContent = now.toLocaleDateString(undefined, opts);
+  document.getElementById('hero-date').textContent = now.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});
+
+  // Hero nums
+  document.getElementById('hero-used').textContent = used;
+  const remEl = document.getElementById('hero-remain');
+  remEl.textContent = Math.max(0, remain);
+  remEl.className = 'hero-num' + (remain < 0 ? '' : remain === 0 ? '' : ' zero');
+  document.getElementById('hero-budget').textContent = dailyBudget;
+  document.getElementById('hero-weeklies').textContent = wkLeft;
+  document.getElementById('prog-bar-max').textContent = dailyBudget;
+
+  // Progress bar
+  const pct = Math.min(100, (used / dailyBudget) * 100);
+  const bar = document.getElementById('prog-bar');
+  bar.style.width = pct + '%';
+  bar.className = 'prog-bar-fill' + (pct >= 100 ? ' over' : pct >= 85 ? ' warn' : '');
+
+  // Weekly strip
+  const weekDates = getWeekDates();
+  const strip = document.getElementById('weekly-days');
+  const dayNames = ['M','T','W','T','F','S','S'];
+  strip.innerHTML = weekDates.map((d,i) => {
+    const dayPts = (weekLog[d]||[]).reduce((s,x)=>s+x.totalPts,0);
+    const isToday = d === todayKey;
+    const isPast = d < todayKey;
+    let cls = 'wday-dot';
+    if (isToday) cls += ' today';
+    else if (isPast && dayPts > 0) cls += (dayPts <= dailyBudget ? ' good' : ' over');
+    return `<div class="wday"><div class="wday-label">${dayNames[i]}</div><div class="${cls}">${dayPts||''}</div></div>`;
+  }).join('');
+
+  // Weekly summary
+  const totalWeek = weekDates.reduce((s,d) => s+(weekLog[d]||[]).reduce((ss,x)=>ss+x.totalPts,0), 0);
+  document.getElementById('weekly-strip-pts').textContent = `${totalWeek} pts this week`;
+
+  // Settings sidebar values
+  document.getElementById('s-daily-val').textContent = dailyBudget;
+  document.getElementById('s-weekly-val').textContent = weeklyBudget;
+
+  // Weeklies
+  document.getElementById('hero-weeklies').textContent = wkLeft;
+
+  // Log list
+  renderLogList();
+}
+
+function renderLogList() {
+  const log = todayLog();
+  const el = document.getElementById('log-list');
+  if (!log.length) {
+    el.innerHTML = '<div class="log-empty">Nothing logged yet.<br>Tap Scan, Search, or AI Meal to add food.</div>';
+    return;
+  }
+  el.innerHTML = log.map(item => {
+    const zero = item.pts === 0;
+    return `<div class="log-item">
+      <div class="li-icon">${item.icon||'🍽️'}</div>
+      <div class="li-info">
+        <div class="li-name">${item.name}${zero?'<span class="zero-badge">ZERO</span>':''}</div>
+        <div class="li-meta">${item.qty>1?`×${item.qty} · `:''}${item.source==='ai'?'AI estimate':'barcode scan'}</div>
+      </div>
+      <div class="li-pts ${zero?'zero-pts':''}">${item.totalPts === 0 ? '0 ✓' : item.totalPts + ' pts'}</div>
+      <button class="li-del" onclick="removeFromLog('${item.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function pushToLog(item) {
+  todayKey = todayStr();
+  item.id = Date.now().toString();
+  if (!weekLog[todayKey]) weekLog[todayKey] = [];
+  weekLog[todayKey].unshift(item);
+  DB.set('ww_week_log', weekLog);
+
+  // If over daily budget, consume from weeklies
+  const used = todayPoints();
+  if (used > dailyBudget) {
+    const overflow = used - dailyBudget;
+    const wk = weekKey(todayKey);
+    weeklyUsed[wk] = (weeklyUsed[wk]||0) + item.totalPts;
+    DB.set('ww_weekly_used', weeklyUsed);
+  }
+  renderDay();
+}
+
+function removeFromLog(id) {
+  if (!weekLog[todayKey]) return;
+  const item = weekLog[todayKey].find(i=>i.id===id);
+  if (!item) return;
+  weekLog[todayKey] = weekLog[todayKey].filter(i=>i.id!==id);
+  DB.set('ww_week_log', weekLog);
+  renderDay();
+}
+
+function resetDay() {
+  if (!confirm('Clear today\'s food log?')) return;
+  weekLog[todayKey] = [];
+  DB.set('ww_week_log', weekLog);
+  renderDay();
+  showToast('Day cleared');
+}
+
+// ══ PROGRESS ════════════════════════════════════════════════════════════════
+function renderProgress() {
+  const weekDates = getWeekDates();
+  const dayPts = weekDates.map(d => (weekLog[d]||[]).reduce((s,x)=>s+x.totalPts,0));
+  const totalWeek = dayPts.reduce((a,b)=>a+b,0);
+  const daysTracked = dayPts.filter(p=>p>0).length;
+  const avg = daysTracked > 0 ? Math.round(totalWeek/daysTracked) : 0;
+
+  document.getElementById('prog-days-tracked').textContent = daysTracked;
+  document.getElementById('prog-weekly-used').textContent = totalWeek;
+  document.getElementById('prog-weeklies-left').textContent = weekliesLeft();
+  document.getElementById('prog-avg').textContent = avg || '—';
+
+  // Bar chart
+  const maxPts = Math.max(dailyBudget, ...dayPts, 1);
+  const dayLabels = ['M','T','W','T','F','S','S'];
+  const today = weekDates.indexOf(todayKey);
+  document.getElementById('week-bar-chart').innerHTML = weekDates.map((d,i) => {
+    const pts = dayPts[i];
+    const heightPct = (pts/maxPts)*100;
+    const isToday = i===today;
+    const isOver = pts > dailyBudget;
+    return `<div class="bar-col">
+      <div class="bar-val">${pts||''}</div>
+      <div class="bar-wrap"><div class="bar ${isToday?'today-bar':''} ${isOver?'over-bar':''}" style="height:${heightPct}%"></div></div>
+      <div class="bar-day">${dayLabels[i]}</div>
+    </div>`;
+  }).join('');
+
+  // Weight log
+  renderWeightList();
+}
+
+function logWeight() {
+  const val = parseFloat(document.getElementById('weight-input').value);
+  if (!val || val < 50 || val > 600) { showToast('Enter a valid weight','err'); return; }
+  const entry = { date: todayStr(), weight: val, id: Date.now() };
+  weightLog.unshift(entry);
+  if (weightLog.length > 30) weightLog = weightLog.slice(0,30);
+  DB.set('ww_weight_log', weightLog);
+  document.getElementById('weight-input').value = '';
+  renderWeightList();
+  showToast(`${val} lbs logged ✓`,'ok');
+}
+
+function renderWeightList() {
+  const el = document.getElementById('weight-list');
+  if (!weightLog.length) { el.innerHTML='<div style="font-size:.78rem;color:var(--ink3);text-align:center;padding:10px">No weight entries yet</div>'; return; }
+  el.innerHTML = weightLog.slice(0,7).map(e => `
+    <div class="weight-entry">
+      <span>${new Date(e.date+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>
+      <strong>${e.weight} lbs</strong>
+    </div>`).join('');
+  if (weightLog.length >= 2) {
+    const diff = (weightLog[0].weight - weightLog[weightLog.length>7?6:weightLog.length-1].weight).toFixed(1);
+    const trend = diff > 0 ? `+${diff} lbs` : `${diff} lbs`;
+    document.getElementById('weight-trend').textContent = trend;
+  }
+}
+
+// ══ BUDGET CALC ══════════════════════════════════════════════════════════════
+function calcBudget() {
+  const sex=document.getElementById('b-sex').value, age=+document.getElementById('b-age').value,
+    wt=+document.getElementById('b-weight').value, ft=+document.getElementById('b-feet').value||0,
+    ins=+document.getElementById('b-inches').value||0, act=+document.getElementById('b-activity').value,
+    goal=document.getElementById('b-goal').value;
+  if (!sex||!age||!wt||!ft){showToast('Fill in all fields','err');return;}
+  const hCm=(ft*12+ins)*2.54, wKg=wt*0.453592;
+  const bmr=sex==='male'?10*wKg+6.25*hCm-5*age+5:10*wKg+6.25*hCm-5*age-161;
+  const tdee=bmr*act, target=goal==='loss'?tdee-500:goal==='gain'?tdee+300:tdee;
+  const budget=Math.min(45,Math.max(18,Math.round(target/55)));
+  document.getElementById('budget-num').textContent=budget;
+  const gl=goal==='loss'?'weight loss':goal==='gain'?'muscle gain':'maintenance';
+  document.getElementById('budget-sub').textContent=`TDEE: ~${Math.round(tdee)} cal/day\nTarget: ~${Math.round(target)} cal for ${gl}\nWeeklies: ${budget<25?28:35} pts/week (approx)`;
+  document.getElementById('budget-result').classList.add('show');
+}
+function applyBudget(){
+  const n=parseInt(document.getElementById('budget-num').textContent);
+  if(!n)return;
+  dailyBudget=n; DB.set('ww_daily_budget',n);
+  weeklyBudget=n<25?28:35; DB.set('ww_weekly_budget',weeklyBudget);
+  renderDay(); showToast(`Budget set to ${n} pts/day ✓`,'ok');
+  setTimeout(()=>switchScreen('day'),700);
+}
+function setManualBudget(){
+  const n=parseInt(document.getElementById('manual-daily').value);
+  if(!n||n<1){showToast('Enter a valid number','err');return;}
+  dailyBudget=n; DB.set('ww_daily_budget',n);
+  document.getElementById('s-daily-val').textContent=n;
+  renderDay(); showToast(`Daily budget: ${n} pts ✓`,'ok');
+}
+function setManualWeekly(){
+  const n=parseInt(document.getElementById('manual-weekly').value);
+  if(!n||n<1){showToast('Enter a valid number','err');return;}
+  weeklyBudget=n; DB.set('ww_weekly_budget',n);
+  document.getElementById('s-weekly-val').textContent=n;
+  renderDay(); showToast(`Weekly allowance: ${n} pts ✓`,'ok');
+}
+
+// ══ PHOTO CAPTURE ════════════════════════════════════════════════════════════
+let capturedImg=null;
+function onPhotoSelected(e){
+  const file=e.target.files[0];if(!file)return;
+  const url=URL.createObjectURL(file);
+  document.getElementById('barcode-preview').src=url;
+  document.getElementById('capture-idle').style.display='none';
+  document.getElementById('photo-preview').classList.add('show');
+  capturedImg=new Image(); capturedImg.src=url;
+}
+function retakePhoto(){
+  document.getElementById('capture-idle').style.display='flex';
+  document.getElementById('photo-preview').classList.remove('show');
+  document.getElementById('barcode-file-input').value='';
+  capturedImg=null;
+}
+async function decodePhoto(){
+  if(!capturedImg)return;
+  const btn=document.getElementById('decode-btn');
+  btn.disabled=true; btn.textContent='⏳ Reading…';
+  try{
+    await new Promise(res=>{if(capturedImg.complete)return res();capturedImg.onload=res;});
+    const hints=new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+    const reader=new ZXing.MultiFormatReader(); reader.setHints(hints);
+    const canvas=document.createElement('canvas');
+    canvas.width=capturedImg.naturalWidth; canvas.height=capturedImg.naturalHeight;
+    canvas.getContext('2d').drawImage(capturedImg,0,0);
+    const imgData=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
+    const result=reader.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.RGBLuminanceSource(imgData.data,canvas.width,canvas.height))));
+    retakePhoto(); await lookupBarcode(result.getText());
+  }catch(e){showToast('Barcode not detected — try better lighting','err');}
+  btn.disabled=false; btn.textContent='🔍 Read Barcode';
+}
+
+// ══ LIVE CAMERA SCANNER (ZXing — iPhone Safari + Android Chrome) ══════════
+let mediaStream=null, animFrame=null, scanning=false, zxingReader=null, torchOn=false;
+
+function getZxingReader() {
+  if (zxingReader) return zxingReader;
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+    ZXing.BarcodeFormat.UPC_A,  ZXing.BarcodeFormat.UPC_E,
+    ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+  ]);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  zxingReader = new ZXing.MultiFormatReader();
+  zxingReader.setHints(hints);
+  return zxingReader;
+}
+
+async function startScanner() {
+  try {
+    // Request camera with continuous autofocus
+    const constraints = {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 },
+        focusMode: { ideal: 'continuous' },
+        advanced: [{ focusMode: 'continuous' }]
+      }
+    };
+    mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+    // Apply continuous autofocus via track settings if supported
+    const track = mediaStream.getVideoTracks()[0];
+    if (track && track.applyConstraints) {
+      try {
+        await track.applyConstraints({
+          advanced: [{ focusMode: 'continuous' }]
+        });
+      } catch(e) { /* not supported on all devices — that's fine */ }
+    }
+
+    const v = document.getElementById('scanner-video');
+    v.srcObject = mediaStream;
+    await v.play();
+    document.getElementById('video-wrap').classList.add('active');
+    document.getElementById('scanner-idle').style.display = 'none';
+    document.getElementById('scan-status-bar').classList.add('active');
+
+    // Show torch button only if supported
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    const torchBtn = document.getElementById('torch-btn');
+    if (torchBtn) torchBtn.style.display = caps.torch ? 'block' : 'none';
+
+    scanning = true;
+    torchOn = false;
+    scanLoop(v, track);
+  } catch(e) {
+    showToast('Camera denied — allow camera access in Settings', 'err');
+  }
+}
+
+function scanLoop(v, track) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const reader = getZxingReader();
+  let lastAttempt = 0;
+  const SCAN_INTERVAL = 150; // ms between decode attempts — gives camera time to refocus
+
+  const tick = (timestamp) => {
+    if (!scanning) return;
+    animFrame = requestAnimationFrame(tick);
+
+    // Throttle attempts
+    if (timestamp - lastAttempt < SCAN_INTERVAL) return;
+    lastAttempt = timestamp;
+
+    if (v.readyState !== v.HAVE_ENOUGH_DATA) return;
+
+    const vw = v.videoWidth, vh = v.videoHeight;
+    if (!vw || !vh) return;
+
+    // Scan CENTER CROP (middle 70% width, middle 50% height)
+    // This is where the scan frame box is — forces focus on barcode area
+    const cropX = Math.floor(vw * 0.15);
+    const cropY = Math.floor(vh * 0.25);
+    const cropW = Math.floor(vw * 0.70);
+    const cropH = Math.floor(vh * 0.50);
+
+    canvas.width  = cropW;
+    canvas.height = cropH;
+    ctx.drawImage(v, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+    try {
+      const imgData = ctx.getImageData(0, 0, cropW, cropH);
+      const lum = new ZXing.RGBLuminanceSource(imgData.data, cropW, cropH);
+      const bin = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+      const result = reader.decode(bin);
+      // Got one!
+      stopScanner();
+      lookupBarcode(result.getText());
+    } catch(e) { /* no barcode yet */ }
+  };
+
+  animFrame = requestAnimationFrame(tick);
+}
+
+async function toggleTorch() {
+  if (!mediaStream) return;
+  const track = mediaStream.getVideoTracks()[0];
+  if (!track) return;
+  try {
+    torchOn = !torchOn;
+    await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+    const btn = document.getElementById('torch-btn');
+    if (btn) {
+      btn.textContent = torchOn ? '🔦 Torch On' : '🔦 Torch';
+      btn.style.background = torchOn ? 'var(--amber)' : '';
+      btn.style.color = torchOn ? '#fff' : '';
+    }
+  } catch(e) { showToast('Torch not supported on this device', 'err'); }
+}
+
+function stopScanner() {
+  scanning = false;
+  torchOn = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  document.getElementById('video-wrap').classList.remove('active');
+  document.getElementById('scanner-idle').style.display = 'flex';
+  document.getElementById('scan-status-bar').classList.remove('active');
+  const torchBtn = document.getElementById('torch-btn');
+  if (torchBtn) { torchBtn.style.display = 'none'; torchBtn.textContent = '🔦 Torch'; }
+}
+
+// ══ FOOD LOOKUP (Open Food Facts) ══════════════════════════════════════════
+async function lookupBarcode(code){
+  showToast('<span class="spin-sm"></span>Looking up…');
+  try{
+    const res=await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json?fields=product_name,brands,nutriments,serving_size,image_small_url,categories_tags`);
+    const data=await res.json();
+    if(data.status!==1){showToast('Product not found','err');return;}
+    const p=data.product,n=p.nutriments||{};
+    const cats=(p.categories_tags||[]).join(' ');
+    const srv=n['energy-kcal_serving']!=null;
+    currentProduct={
+      name:p.product_name||'Unknown',brand:p.brands||'',image:p.image_small_url||null,cats,
+      cal:srv?n['energy-kcal_serving']:n['energy-kcal_100g'],
+      sat:srv?n['saturated-fat_serving']:n['saturated-fat_100g'],
+      sug:srv?n['sugars_serving']:n['sugars_100g'],
+      pro:srv?n['proteins_serving']:n['proteins_100g'],
+      fib:srv?n['fiber_serving']:n['fiber_100g'],
+      servLabel:p.serving_size||(srv?'per serving':'per 100g'),srv
+    };
+    currentProduct.pts=calcWW(currentProduct.cal,currentProduct.sat,currentProduct.sug,currentProduct.pro,currentProduct.fib,currentProduct.name,currentProduct.cats);
+    currentQty=1; renderProductResult(); hideToast();
+    switchScreen('scan');
+  }catch{showToast('Network error','err');}
+}
+
+function renderProductResult(){
+  const p=currentProduct;
+  document.getElementById('prod-img-wrap').innerHTML=p.image
+    ?`<img class="prod-img" src="${p.image}" onerror="this.outerHTML='<div class=prod-img-ph>🛒</div>'">`
+    :`<div class="prod-img-ph">🛒</div>`;
+  document.getElementById('prod-name').textContent=p.name;
+  document.getElementById('prod-brand').textContent=p.brand;
+  const pts=p.pts??'?';
+  const zero=pts===0;
+  const pEl=document.getElementById('pts-display');
+  pEl.textContent=pts; pEl.className='prod-pts-num'+(zero?' zero-pts':pts>12?' high':pts>7?' med':'');
+  document.getElementById('pts-lbl').textContent='WW PersonalPoints™';
+  document.getElementById('serv-size').textContent=p.servLabel;
+  document.getElementById('zero-msg').style.display=zero?'block':'none';
+  document.getElementById('n-cal').textContent=p.cal!=null?Math.round(p.cal):'—';
+  document.getElementById('n-sat').textContent=p.sat!=null?(+p.sat).toFixed(1):'—';
+  document.getElementById('n-sug').textContent=p.sug!=null?Math.round(p.sug):'—';
+  document.getElementById('n-pro').textContent=p.pro!=null?Math.round(p.pro):'—';
+  document.getElementById('qty-display').textContent=1;
+  document.getElementById('prod-result').classList.add('show');
+}
+
+function lookupManual(){
+  const v=document.getElementById('manual-barcode').value.trim();
+  if(!v){showToast('Enter a barcode','err');return;}
+  document.getElementById('manual-barcode').value=''; lookupBarcode(v);
+}
+document.getElementById('manual-barcode').addEventListener('keydown',e=>{if(e.key==='Enter')lookupManual();});
+function changeQty(d){currentQty=Math.max(1,currentQty+d);document.getElementById('qty-display').textContent=currentQty;}
+function addScanToLog(){
+  if(!currentProduct)return;
+  const pts=(currentProduct.pts||0)*currentQty;
+  pushToLog({name:currentProduct.name,pts:currentProduct.pts||0,qty:currentQty,totalPts:pts,icon:'🛒',source:'scan'});
+  showToast(`+${pts} pts added ✓`,'ok');
+}
+
+// ══ SEARCH ══════════════════════════════════════════════════════════════════
+document.getElementById('food-search-input').addEventListener('keydown',e=>{if(e.key==='Enter')searchFood();});
+
+async function searchFood(){
+  const query=document.getElementById('food-search-input').value.trim();
+  if(!query){showToast('Enter a food to search','err');return;}
+  const btn=document.getElementById('search-btn'); btn.disabled=true; btn.textContent='…';
+  document.getElementById('zero-banner').classList.remove('show');
+  document.getElementById('search-results').innerHTML='<div class="search-empty">Searching…</div>';
+
+  // Zero point banner — only show for unambiguous zero foods (not dairy which needs qualifier)
+  const isDairyQuery = ['yogurt','cottage cheese','quark'].some(x => query.toLowerCase().includes(x));
+  const isZero = !isDairyQuery && isZeroPoint(query, '', 0);
+  if (isZero) {
+    const zb=document.getElementById('zero-banner');
+    zb.innerHTML=`✅ "${query}" is a WW ZeroPoint™ food — always 0 pts!`;
+    zb.classList.add('show');
+  }
+
+  try{
+    const res=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=10&fields=id,product_name,brands,nutriments,serving_size,image_small_url,categories_tags`);
+    const data=await res.json();
+    const products=(data.products||[]).filter(p=>p.product_name);
+    if(!products.length){document.getElementById('search-results').innerHTML='<div class="search-empty">No results. Try a different spelling.</div>';}
+    else renderSearchResults(products);
+  }catch{document.getElementById('search-results').innerHTML='<div class="search-empty">Network error — try again.</div>';}
+  btn.disabled=false; btn.textContent='Search';
+}
+
+function renderSearchResults(products){
+  const wrap=document.getElementById('search-results');
+  wrap.innerHTML='';
+  products.forEach(p=>{
+    const n=p.nutriments||{}, cats=(p.categories_tags||[]).join(' ');
+    const srv=n['energy-kcal_serving']!=null;
+    const cal=srv?n['energy-kcal_serving']:n['energy-kcal_100g'];
+    const sat=srv?n['saturated-fat_serving']:n['saturated-fat_100g'];
+    const sug=srv?n['sugars_serving']:n['sugars_100g'];
+    const pro=srv?n['proteins_serving']:n['proteins_100g'];
+    const fib=srv?n['fiber_serving']:n['fiber_100g'];
+    const pts=calcWW(cal,sat,sug,pro,fib,p.product_name,cats);    const zero=pts===0;
+    const cls=zero?'zero':pts>12?'high':pts>7?'med':'';
+    const servLabel=p.serving_size||(srv?'per serving':'per 100g');
+
+    const el=document.createElement('div'); el.className='sri';
+    el.innerHTML=`
+      ${p.image_small_url
+        ?`<img class="sri-thumb" src="${p.image_small_url}" onerror="this.outerHTML='<div class=sri-thumb-ph>🥗</div>'">`
+        :`<div class="sri-thumb-ph">🥗</div>`}
+      <div class="sri-info">
+        <div class="sri-name">${p.product_name}${zero?'<span class="zero-badge">ZERO</span>':''}</div>
+        ${p.brands?`<div class="sri-brand">${p.brands}</div>`:''}
+        <div class="sri-cal">${servLabel}${cal!=null?` · ${Math.round(cal)} cal`:''}</div>
+      </div>
+      <div class="sri-pts-col">
+        <div class="sri-pts-num ${cls}">${pts??'?'}</div>
+        <div class="sri-pts-lbl">pts</div>
+      </div>
+      <button class="sri-add" onclick='quickAddFromSearch(${JSON.stringify({name:p.product_name,pts:pts||0}).replace(/'/g,"&#39;")})'>+ Log</button>`;
+    wrap.appendChild(el);
+  });
+}
+
+function quickAddFromSearch(item){
+  pushToLog({name:item.name,pts:item.pts,qty:1,totalPts:item.pts,icon:'🔎',source:'search'});
+  showToast(`+${item.pts} pts logged ✓`,'ok');
+  setTimeout(()=>switchScreen('day'),500);
+}
+
+// ══ AI MEAL ══════════════════════════════════════════════════════════════════
+function setMeal(t){document.getElementById('meal-input').value=t;}
+async function analyzeMeal(){
+  const text=document.getElementById('meal-input').value.trim();
+  if(!text){showToast('Describe your meal first','err');return;}
+  document.getElementById('analyze-btn').disabled=true;
+  document.getElementById('ai-result').classList.remove('show');
+  document.getElementById('ai-loading').classList.add('show');
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',max_tokens:1200,
+        messages:[{role:'user',content:`You are a nutrition expert who knows the WW (Weight Watchers) PersonalPoints system for 2024-2025.
+
+ZEROPOINT FOODS (always 0 pts):
+- ALL whole fruits (fresh/frozen, NO added sugar — fruit juice, dried fruit, applesauce are NOT zero)
+- ALL vegetables including potatoes, sweet potatoes, corn, peas
+- Whole eggs (any style — scrambled, fried, boiled, omelette)
+- Chicken breast, chicken thighs (skinless/plain), turkey breast, turkey thighs (skinless/plain)
+- All plain fish and seafood (NOT breaded, fried, or in sauces)
+- Plain rolled oats / steel-cut oats / oatmeal (NOT flavored packets, granola, or oat bars)
+- ONLY plain nonfat/fat-free yogurt with no added sugar (plain nonfat Greek yogurt IS zero; Chobani fruit flavors, vanilla, honey — NOT zero)
+- ONLY plain nonfat cottage cheese (NOT low-fat 2%, NOT flavored)
+- Tofu, tempeh, edamame
+- All beans, lentils, chickpeas (plain — NOT bean dip, hummus, refried beans)
+
+NOT ZERO (these have points): flavored yogurt of any kind, low-fat (2%) dairy, fruit juice, dried fruit, granola, oat bars, flavored oatmeal, processed meats, breaded/fried proteins, chips, crackers, bread, rice, pasta, cheese, butter, oil, nuts, peanut butter, alcohol, soda, juice.
+
+WW formula for non-zero foods:
+Points = (calories × 0.0305) + (sat_fat_g × 0.275) + (sugar_g × 0.12) - (protein_g × 0.098) - (fiber_g × 0.098)
+Min 0, round to nearest integer.
+
+User ate: "${text}"
+
+For each item: identify if truly ZeroPoint per above rules, otherwise estimate nutrition and calculate points.
+Return ONLY valid JSON (no markdown):
+{"mealLabel":"short name","totalPoints":number,"items":[{"name":"item description","isZero":boolean,"calories":number,"protein":number,"saturatedFat":number,"sugar":number,"fiber":number,"points":number,"note":"brief note"}]}`}]
+      })
+    });
+    const data=await res.json();
+    const raw=data.content?.find(b=>b.type==='text')?.text||'';
+    currentAiMeal=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    renderAiResult(currentAiMeal);
+  }catch{
+    showToast('AI estimation failed','err');
+    document.getElementById('ai-loading').classList.remove('show');
+  }
+  document.getElementById('analyze-btn').disabled=false;
+}
+
+function renderAiResult(meal){
+  document.getElementById('ai-loading').classList.remove('show');
+  document.getElementById('ai-total-pts').textContent=meal.totalPoints;
+  document.getElementById('ai-meal-label').textContent=meal.mealLabel||'Meal';
+  document.getElementById('ai-items').innerHTML=meal.items.map(item=>`
+    <div class="ai-item-row">
+      <div style="font-size:1rem">${item.isZero?'✅':'🍽️'}</div>
+      <div style="flex:1"><div class="ai-item-name">${item.name}${item.isZero?'<span class="zero-badge">ZERO</span>':''}</div><div class="ai-item-cal">${item.calories} cal · ${item.protein}g protein · ${item.note||''}</div></div>
+      <div class="ai-item-pts-col">${item.points} pts</div>
+    </div>`).join('');
+  document.getElementById('ai-result').classList.add('show');
+}
+
+function addAiMealToLog(){
+  if(!currentAiMeal)return;
+  pushToLog({name:currentAiMeal.mealLabel||'AI Meal',pts:currentAiMeal.totalPoints,qty:1,totalPts:currentAiMeal.totalPoints,icon:'✨',source:'ai'});
+  showToast(`+${currentAiMeal.totalPoints} pts added ✓`,'ok');
+  setTimeout(()=>switchScreen('day'),600);
+}
+
+// ══ TOAST ════════════════════════════════════════════════════════════════════
+let tTimer;
+function showToast(msg,type=''){const el=document.getElementById('toast');el.innerHTML=msg;el.className='show'+(type?' '+type:'');clearTimeout(tTimer);if(type)tTimer=setTimeout(hideToast,3000);}
+function hideToast(){document.getElementById('toast').className='';}
+
+// ══ INIT ════════════════════════════════════════════════════════════════════
+renderDay();
+// Set today's date header
+const now=new Date();
+document.getElementById('day-header-date').textContent=now.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+</script>
+</body>
+</html>
