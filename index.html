@@ -1164,76 +1164,38 @@ async function decodePhoto() {
   try {
     await new Promise(res => { if (capturedImg.complete) return res(); capturedImg.onload = res; });
 
-    const hints = new Map();
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-      ZXing.BarcodeFormat.UPC_A,  ZXing.BarcodeFormat.UPC_E,
-      ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
-    ]);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    hints.set(ZXing.DecodeHintType.PURE_BARCODE, false);
-    const reader = new ZXing.MultiFormatReader();
-    reader.setHints(hints);
-
-    const iw = capturedImg.naturalWidth;
-    const ih = capturedImg.naturalHeight;
-
-    // Try multiple strategies — first one to succeed wins
-    const strategies = [
-      // 1. Full image, native size
-      () => drawRegion(0, 0, iw, ih, iw, ih),
-      // 2. Full image, scaled down (helps with very high-res iPhone photos)
-      () => drawRegion(0, 0, iw, ih, 1280, Math.round(ih * (1280 / iw))),
-      // 3. Center crop (barcode likely in middle of photo)
-      () => drawRegion(iw*0.1, ih*0.2, iw*0.8, ih*0.6, 1024, Math.round(ih*0.6*(1024/(iw*0.8)))),
-      // 4. Top-center strip (common barcode position)
-      () => drawRegion(iw*0.05, ih*0.1, iw*0.9, ih*0.5, 1024, Math.round(ih*0.4*(1024/(iw*0.9)))),
-      // 5. Bottom-center strip
-      () => drawRegion(iw*0.05, ih*0.4, iw*0.9, ih*0.5, 1024, Math.round(ih*0.5*(1024/(iw*0.9)))),
-      // 6. Full image with contrast boost
-      () => drawRegionContrast(0, 0, iw, ih, 1280, Math.round(ih * (1280/iw))),
-    ];
-
-    function drawRegion(sx, sy, sw, sh, dw, dh) {
-      const c = document.createElement('canvas');
-      c.width = dw; c.height = dh;
-      c.getContext('2d').drawImage(capturedImg, sx, sy, sw, sh, 0, 0, dw, dh);
-      return c;
+    // Convert image to base64 — scale down first to reduce upload size
+    const MAX_DIM = 1600;
+    const canvas = document.createElement('canvas');
+    let w = capturedImg.naturalWidth, h = capturedImg.naturalHeight;
+    if (w > MAX_DIM || h > MAX_DIM) {
+      const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+      w = Math.round(w * scale); h = Math.round(h * scale);
     }
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(capturedImg, 0, 0, w, h);
 
-    function drawRegionContrast(sx, sy, sw, sh, dw, dh) {
-      const c = document.createElement('canvas');
-      c.width = dw; c.height = dh;
-      const ctx = c.getContext('2d');
-      ctx.filter = 'contrast(150%) grayscale(100%)';
-      ctx.drawImage(capturedImg, sx, sy, sw, sh, 0, 0, dw, dh);
-      return c;
-    }
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const base64 = dataUrl.split(',')[1];
 
-    function tryDecode(canvas) {
-      const ctx = canvas.getContext('2d');
-      const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const lum = new ZXing.RGBLuminanceSource(d.data, canvas.width, canvas.height);
-      const bin = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
-      return reader.decode(bin); // throws if not found
-    }
+    showToast('<span class="spin-sm"></span>Reading barcode…');
 
-    let result = null;
-    for (const strategy of strategies) {
-      try {
-        const canvas = strategy();
-        result = tryDecode(canvas);
-        if (result) break;
-      } catch(e) { /* try next */ }
-    }
+    const res = await fetch('/api/scan-barcode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: base64, mimeType: 'image/jpeg' })
+    });
 
-    if (result) {
-      retakePhoto();
-      lookupBarcode(result.getText());
-    } else {
-      showToast('No barcode found — make sure barcode fills the frame and is in focus', 'err');
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      showToast('No barcode detected — try a clearer photo', 'err');
       if (btn) { btn.disabled = false; btn.textContent = '🔍 Try Again'; }
+      return;
     }
+
+    retakePhoto();
+    lookupBarcode(data.barcode);
 
   } catch(e) {
     showToast('Could not read image — please try again', 'err');
