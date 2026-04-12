@@ -398,7 +398,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 
     <!-- Live scanner (HTTPS required — works on Netlify/Vercel) -->
     <div class="live-scanner-card" style="display:block">
-      <div id="video-wrap"><video id="scanner-video" autoplay muted playsinline></video><div class="scan-overlay"><div class="scan-frame"><div class="scan-line"></div></div></div></div>
+      <div id="video-wrap"><video id="scanner-video" autoplay muted playsinline webkit-playsinline x-webkit-airplay="deny"></video><div class="scan-overlay"><div class="scan-frame"><div class="scan-line"></div></div></div></div>
       <div class="scanner-idle-inner" id="scanner-idle"><div style="font-size:2.2rem">🔍</div><div style="font-size:.82rem;color:var(--ink2);text-align:center">Point camera at barcode</div><button class="scan-start-btn" onclick="startScanner()">Open Camera</button></div>
       <div class="scan-status-bar" id="scan-status-bar">
         <span style="font-size:.78rem;color:var(--ink2)">Hold steady over barcode…</span>
@@ -1145,30 +1145,33 @@ function runZxingScanner(v) {
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  let last = 0;
 
-  const tick = (ts) => {
+  // Use setInterval instead of requestAnimationFrame —
+  // Safari throttles rAF for canvas/video reads but not setInterval
+  // 600ms gives the iPhone camera enough time to autofocus between attempts
+  setTimeout(() => {
+    // 1.5s warmup before first scan attempt — iPhone needs time to focus
     if (!scanning) return;
-    scanRaf = requestAnimationFrame(tick);
-    if (ts - last < 400) return; // 400ms between attempts — let camera focus
-    last = ts;
-    if (v.readyState < 2 || !v.videoWidth) return;
+    scanRaf = setInterval(() => {
+      if (!scanning) { clearInterval(scanRaf); return; }
+      if (!v.videoWidth || !v.videoHeight) return;
+      if (v.readyState < v.HAVE_ENOUGH_DATA) return;
+      if (v.paused || v.ended) return;
 
-    // Full frame — don't crop, iPhone needs full context to focus properly
-    canvas.width = v.videoWidth;
-    canvas.height = v.videoHeight;
-    ctx.drawImage(v, 0, 0);
+      canvas.width = v.videoWidth;
+      canvas.height = v.videoHeight;
 
-    try {
-      const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const lum = new ZXing.RGBLuminanceSource(d.data, canvas.width, canvas.height);
-      const bin = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
-      const result = reader.decode(bin);
-      stopScanner();
-      lookupBarcode(result.getText());
-    } catch(e) { /* NotFoundException is normal — keep looping */ }
-  };
-  scanRaf = requestAnimationFrame(tick);
+      try {
+        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+        const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const lum = new ZXing.RGBLuminanceSource(d.data, canvas.width, canvas.height);
+        const bin = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+        const result = reader.decode(bin);
+        stopScanner();
+        lookupBarcode(result.getText());
+      } catch(e) { /* NotFoundException — normal, keep going */ }
+    }, 600);
+  }, 1500);
 }
 
 async function toggleTorch() {
@@ -1188,7 +1191,7 @@ async function toggleTorch() {
 
 function stopScanner() {
   scanning = false;
-  if (scanRaf) { clearTimeout(scanRaf); cancelAnimationFrame(scanRaf); scanRaf = null; }
+  if (scanRaf) { clearInterval(scanRaf); clearTimeout(scanRaf); cancelAnimationFrame(scanRaf); scanRaf = null; }
   if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
   const v = document.getElementById('scanner-video');
   if (v) v.srcObject = null;
