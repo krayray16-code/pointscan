@@ -1,11 +1,12 @@
+// Barcode reader from photo — uses Google Gemini Vision (free tier)
 export default async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
 
   const apiKey = (typeof Netlify !== 'undefined' && Netlify.env)
-    ? Netlify.env.get('ANTHROPIC_API_KEY')
-    : process.env.ANTHROPIC_API_KEY;
+    ? Netlify.env.get('GEMINI_API_KEY')
+    : process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'API key not configured' }), {
@@ -24,56 +25,52 @@ export default async (req) => {
   }
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 100,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mimeType,
-                data: imageBase64,
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: imageBase64
+                }
+              },
+              {
+                text: 'Find the barcode in this image. Return ONLY the barcode digits with no spaces, dashes, letters or explanation. Example: 049000028911\n\nIf no barcode is visible, return exactly: NONE'
               }
-            },
-            {
-              type: 'text',
-              text: 'Look at this image and find the barcode (EAN-13, UPC-A, EAN-8, UPC-E, or similar). Return ONLY the numeric barcode digits with no other text, spaces, or explanation. If you cannot find a barcode, return exactly: NONE'
-            }
-          ]
-        }]
-      })
-    });
+            ]
+          }],
+          generationConfig: { maxOutputTokens: 50, temperature: 0 }
+        })
+      }
+    );
 
     if (!response.ok) {
       const err = await response.text();
-      return new Response(JSON.stringify({ error: 'Vision API error', detail: err }), {
+      return new Response(JSON.stringify({ error: 'Gemini API error', detail: err }), {
         status: 500, headers: { 'Content-Type': 'application/json' }
       });
     }
 
     const data = await response.json();
-    const text = (data.content?.find(b => b.type === 'text')?.text || '').trim();
+    const rawText = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
-    if (!text || text === 'NONE' || text.toLowerCase().includes('none')) {
-      return new Response(JSON.stringify({ error: 'No barcode found in image' }), {
+    console.log('Gemini barcode response:', rawText);
+
+    if (!rawText || rawText.toUpperCase() === 'NONE') {
+      return new Response(JSON.stringify({ error: 'No barcode found' }), {
         status: 404, headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // Clean up — keep only digits
-    const barcode = text.replace(/\D/g, '');
+    const barcode = rawText.replace(/\D/g, '');
+
     if (barcode.length < 6) {
-      return new Response(JSON.stringify({ error: 'No barcode found in image' }), {
+      return new Response(JSON.stringify({ error: 'No valid barcode found', raw: rawText }), {
         status: 404, headers: { 'Content-Type': 'application/json' }
       });
     }
