@@ -1144,9 +1144,10 @@ function onPhotoSelected(e) {
   document.getElementById('capture-idle').style.display = 'none';
   document.getElementById('photo-preview').classList.add('show');
   capturedImg = new Image();
-  capturedImg.src = url;
-  // Auto-attempt decode after image loads
+  // Set onload BEFORE src — blob URLs can load synchronously on iOS,
+  // causing the event to fire before the handler is registered.
   capturedImg.onload = () => decodePhoto();
+  capturedImg.src = url;
 }
 
 function retakePhoto() {
@@ -1189,7 +1190,10 @@ async function decodePhoto() {
     const data = await res.json();
 
     if (!res.ok || data.error) {
-      showToast('No barcode detected — try a clearer photo', 'err');
+      const msg = res.status === 404
+        ? 'No barcode detected — try a clearer photo'
+        : 'Scan failed (' + (data.error || res.status) + ')';
+      showToast(msg, 'err');
       if (btn) { btn.disabled = false; btn.textContent = '🔍 Try Again'; }
       return;
     }
@@ -1351,8 +1355,8 @@ async function analyzeMeal(){
     currentAiMeal = await res.json();
     if (currentAiMeal.error) throw new Error(currentAiMeal.error);
     renderAiResult(currentAiMeal);
-  }catch{
-    showToast('AI estimation failed','err');
+  }catch(e){
+    showToast('AI estimation failed — ' + (e?.message || 'check connection'), 'err');
     document.getElementById('ai-loading').classList.remove('show');
   }
   document.getElementById('analyze-btn').disabled=false;
@@ -1362,7 +1366,7 @@ function renderAiResult(meal){
   document.getElementById('ai-loading').classList.remove('show');
   document.getElementById('ai-total-pts').textContent=meal.totalPoints;
   document.getElementById('ai-meal-label').textContent=meal.mealLabel||'Meal';
-  document.getElementById('ai-items').innerHTML=meal.items.map(item=>`
+  document.getElementById('ai-items').innerHTML=(meal.items||[]).map(item=>`
     <div class="ai-item-row">
       <div style="font-size:1rem">${item.isZero?'✅':'🍽️'}</div>
       <div style="flex:1"><div class="ai-item-name">${item.name}${item.isZero?'<span class="zero-badge">ZERO</span>':''}</div><div class="ai-item-cal">${item.calories} cal · ${item.protein}g protein · ${item.note||''}</div></div>
