@@ -1,4 +1,3 @@
-// AI Meal estimator — uses Google Gemini (free tier)
 export default async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
@@ -34,30 +33,36 @@ WW formula (non-zero): pts = round(max(0, cal*0.0305 + sat_fat*0.275 + sugar*0.1
 
 User ate: "${mealText.replace(/"/g, "'")}"
 
-Reply ONLY with JSON, no markdown, no explanation:
+Reply ONLY with raw JSON, absolutely no markdown, no backticks, no explanation:
 {"mealLabel":"name","totalPoints":0,"items":[{"name":"item","isZero":true,"calories":0,"protein":0,"saturatedFat":0,"sugar":0,"fiber":0,"points":0,"note":""}]}`;
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 1024, temperature: 0.1 }
-        })
-      }
-    );
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: 1024,
+          temperature: 0.1,
+          responseMimeType: 'application/json'
+        }
+      })
+    });
+
+    const rawBody = await response.text();
+    console.log('Gemini response status:', response.status);
+    console.log('Gemini response body:', rawBody.substring(0, 500));
 
     if (!response.ok) {
-      const err = await response.text();
-      return new Response(JSON.stringify({ error: 'Gemini API error', detail: err }), {
+      return new Response(JSON.stringify({ error: 'Gemini API error', detail: rawBody }), {
         status: 500, headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const data = await response.json();
+    const data = JSON.parse(rawBody);
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
@@ -66,6 +71,7 @@ Reply ONLY with JSON, no markdown, no explanation:
       status: 200, headers: { 'Content-Type': 'application/json' }
     });
   } catch (e) {
+    console.error('ai-meal error:', e.message);
     return new Response(JSON.stringify({ error: 'Failed', detail: e.message }), {
       status: 500, headers: { 'Content-Type': 'application/json' }
     });
