@@ -23,56 +23,74 @@ export default async (req) => {
     return new Response(JSON.stringify({ error: 'Invalid meal text' }), { status: 400 });
   }
 
-  const prompt = `You are a nutrition expert who knows WW PersonalPoints 2024-2025.
+  const prompt = `You are a nutrition expert. Calculate WW PersonalPoints for this meal.
 
-ZEROPOINT (0 pts): all whole fruits, all vegetables (including potato/corn/peas), whole eggs, skinless chicken/turkey, plain fish/seafood, plain oats, plain nonfat yogurt (NO flavor), plain nonfat cottage cheese, tofu, tempeh, edamame, plain beans/lentils.
+ZERO POINTS (always 0): whole fruits, all vegetables including potatoes, whole eggs, plain skinless chicken/turkey, plain fish/seafood, plain oats, plain nonfat yogurt (no flavor), plain nonfat cottage cheese, tofu, tempeh, beans, lentils.
 
-NOT ZERO: flavored yogurt, 2% dairy, juice, dried fruit, granola, bread, rice, pasta, cheese, butter, oil, nuts, peanut butter, alcohol, soda.
+NOT ZERO: flavored yogurt, 2% dairy, juice, dried fruit, granola, bread, rice, pasta, cheese, butter, oil, nuts, peanut butter, alcohol.
 
-WW formula (non-zero): pts = round(max(0, cal*0.0305 + sat_fat*0.275 + sugar*0.12 - protein*0.098 - fiber*0.098))
+WW formula for non-zero foods: points = round(max(0, calories*0.0305 + saturated_fat*0.275 + sugar*0.12 - protein*0.098 - fiber*0.098))
 
-User ate: "${mealText.replace(/"/g, "'")}"
+Meal: ${mealText}
 
-Reply ONLY with raw JSON, absolutely no markdown, no backticks, no explanation:
-{"mealLabel":"name","totalPoints":0,"items":[{"name":"item","isZero":true,"calories":0,"protein":0,"saturatedFat":0,"sugar":0,"fiber":0,"points":0,"note":""}]}`;
+Respond with ONLY this JSON structure, no other text:
+{"mealLabel":"short meal name","totalPoints":5,"items":[{"name":"food item","isZero":false,"calories":100,"protein":10,"saturatedFat":1,"sugar":2,"fiber":0,"points":3,"note":"brief note"}]}`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          maxOutputTokens: 1024,
-          temperature: 0.1,
-          responseMimeType: 'application/json'
+    // Try gemini-2.0-flash first, fall back to gemini-1.5-flash
+    const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+    let lastError = null;
+
+    for (const model of models) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: 1024, temperature: 0.1 }
+          })
+        });
+
+        const rawBody = await response.text();
+        console.log(`${model} status:`, response.status);
+
+        if (!response.ok) {
+          lastError = rawBody;
+          console.log(`${model} failed:`, rawBody.substring(0, 200));
+          continue; // try next model
         }
-      })
-    });
 
-    const rawBody = await response.text();
-    console.log('Gemini response status:', response.status);
-    console.log('Gemini response body:', rawBody.substring(0, 500));
+        const data = JSON.parse(rawBody);
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        
+        // Extract JSON from response — handle markdown code blocks
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          lastError = 'No JSON in response: ' + text.substring(0, 100);
+          continue;
+        }
 
-    if (!response.ok) {
-      return new Response(JSON.stringify({ error: 'Gemini API error', detail: rawBody }), {
-        status: 500, headers: { 'Content-Type': 'application/json' }
-      });
+        const parsed = JSON.parse(jsonMatch[0]);
+        return new Response(JSON.stringify(parsed), {
+          status: 200, headers: { 'Content-Type': 'application/json' }
+        });
+
+      } catch (e) {
+        lastError = e.message;
+        console.log(`${model} exception:`, e.message);
+        continue;
+      }
     }
 
-    const data = JSON.parse(rawBody);
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const clean = text.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
-
-    return new Response(JSON.stringify(parsed), {
-      status: 200, headers: { 'Content-Type': 'application/json' }
+    return new Response(JSON.stringify({ error: 'All models failed', detail: lastError }), {
+      status: 500, headers: { 'Content-Type': 'application/json' }
     });
+
   } catch (e) {
-    console.error('ai-meal error:', e.message);
-    return new Response(JSON.stringify({ error: 'Failed', detail: e.message }), {
+    return new Response(JSON.stringify({ error: 'Request failed', detail: e.message }), {
       status: 500, headers: { 'Content-Type': 'application/json' }
     });
   }
