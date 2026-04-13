@@ -1,12 +1,12 @@
+// AI Meal estimator — uses Google Gemini (free tier)
 export default async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  // Try both Netlify env and process.env for compatibility
   const apiKey = (typeof Netlify !== 'undefined' && Netlify.env)
-    ? Netlify.env.get('ANTHROPIC_API_KEY')
-    : process.env.ANTHROPIC_API_KEY;
+    ? Netlify.env.get('GEMINI_API_KEY')
+    : process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'API key not configured' }), {
@@ -34,39 +34,36 @@ WW formula (non-zero): pts = round(max(0, cal*0.0305 + sat_fat*0.275 + sugar*0.1
 
 User ate: "${mealText.replace(/"/g, "'")}"
 
-Reply ONLY with JSON, no markdown:
+Reply ONLY with JSON, no markdown, no explanation:
 {"mealLabel":"name","totalPoints":0,"items":[{"name":"item","isZero":true,"calories":0,"protein":0,"saturatedFat":0,"sugar":0,"fiber":0,"points":0,"note":""}]}`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 1024, temperature: 0.1 }
+        })
+      }
+    );
 
     if (!response.ok) {
-      const errText = await response.text();
-      return new Response(JSON.stringify({ error: 'Anthropic API error', detail: errText }), {
+      const err = await response.text();
+      return new Response(JSON.stringify({ error: 'Gemini API error', detail: err }), {
         status: 500, headers: { 'Content-Type': 'application/json' }
       });
     }
 
     const data = await response.json();
-    const text = data.content?.find(b => b.type === 'text')?.text || '';
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
 
     return new Response(JSON.stringify(parsed), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      status: 200, headers: { 'Content-Type': 'application/json' }
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: 'Failed', detail: e.message }), {
