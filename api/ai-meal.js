@@ -38,7 +38,8 @@ Respond with ONLY this JSON structure, no other text:
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: { maxOutputTokens: 1024, temperature: 0.1 }
-          })
+          }),
+          signal: AbortSignal.timeout(12000)
         }
       );
 

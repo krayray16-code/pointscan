@@ -1,5 +1,6 @@
 {
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" }
-  ]
+  "functions": {
+    "api/ai-meal.js": { "maxDuration": 30 },
+    "api/scan-barcode.js": { "maxDuration": 30 }
+  }
 }

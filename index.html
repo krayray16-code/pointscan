@@ -1165,8 +1165,9 @@ async function decodePhoto() {
   try {
     await new Promise(res => { if (capturedImg.complete) return res(); capturedImg.onload = res; });
 
-    // Convert image to base64 — scale down first to reduce upload size
-    const MAX_DIM = 1600;
+    // Convert image to base64 — scale down aggressively to keep payload small.
+    // 1024px is plenty for Gemini to read a barcode; larger just adds upload time.
+    const MAX_DIM = 1024;
     const canvas = document.createElement('canvas');
     let w = capturedImg.naturalWidth, h = capturedImg.naturalHeight;
     if (w > MAX_DIM || h > MAX_DIM) {
@@ -1176,7 +1177,7 @@ async function decodePhoto() {
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').drawImage(capturedImg, 0, 0, w, h);
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
     const base64 = dataUrl.split(',')[1];
 
     showToast('<span class="spin-sm"></span>Reading barcode…');
