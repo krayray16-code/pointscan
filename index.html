@@ -308,6 +308,35 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 @keyframes spin2{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 .ai-loading-txt{font-size:.78rem;color:var(--ink2);margin-top:8px;}
 
+/* ── EDIT ENTRY SHEET ── */
+.edit-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-end;justify-content:center;}
+.edit-overlay.show{display:flex;}
+.edit-sheet{background:var(--surface);border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));width:100%;max-width:520px;}
+.edit-sheet-name{font-family:'Nunito',sans-serif;font-weight:900;font-size:1rem;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.edit-sheet-sub{font-size:.73rem;color:var(--ink2);margin-bottom:18px;}
+.edit-qty-row{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:10px;}
+.edit-qty-btn{width:46px;height:46px;border-radius:50%;background:var(--teal-light);border:1.5px solid var(--teal);color:var(--teal);font-size:1.5rem;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;-webkit-tap-highlight-color:transparent;}
+.edit-qty-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:2.8rem;min-width:64px;text-align:center;}
+.edit-pts-preview{text-align:center;font-size:.78rem;color:var(--ink2);margin-bottom:18px;min-height:18px;}
+.edit-pts-preview strong{color:var(--teal);font-family:'Nunito',sans-serif;font-weight:900;}
+.edit-actions{display:flex;gap:10px;}
+.edit-save-btn{flex:1;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:13px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;}
+.edit-del-btn{background:var(--red-light);border:1.5px solid var(--red);color:var(--red);border-radius:99px;padding:13px 18px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;}
+
+/* ── RECENT FOODS ── */
+.recents-wrap{margin-bottom:14px;}
+.recents-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;color:var(--ink);margin-bottom:8px;}
+.recents-list{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.recents-list::-webkit-scrollbar{display:none;}
+.recent-chip{display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:99px;padding:7px 12px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;transition:background .15s;box-shadow:var(--shadow-sm);}
+.recent-chip:active{background:var(--teal-light);}
+.recent-chip-icon{font-size:.85rem;}
+.recent-chip-name{font-size:.72rem;font-weight:600;color:var(--ink);}
+.recent-chip-pts{font-family:'Nunito',sans-serif;font-weight:800;font-size:.68rem;color:var(--teal);margin-left:2px;}
+
+/* log items are tappable */
+.log-item{cursor:pointer;}
+
 /* ── TOAST ── */
 #toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--ink);color:#fff;border-radius:99px;padding:10px 22px;font-size:.8rem;font-weight:600;z-index:999;transition:all .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
@@ -359,6 +388,12 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
         <span id="weekly-strip-pts" style="font-size:.75rem;color:var(--teal)"></span>
       </div>
       <div class="weekly-days" id="weekly-days"></div>
+    </div>
+
+    <!-- Recent foods -->
+    <div class="recents-wrap" id="recents-wrap" style="display:none">
+      <div class="recents-title">Recently Logged</div>
+      <div class="recents-list" id="recents-list"></div>
     </div>
 
     <!-- Quick add -->
@@ -631,6 +666,14 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
       </div>
     </div>
 
+    <div class="settings-section-title">Data & Backup</div>
+    <div class="settings-card">
+      <div style="padding:14px;">
+        <div style="font-size:.78rem;color:var(--ink2);margin-bottom:10px;line-height:1.6">Export your entire food log and weight history as a JSON file. Use this to back up your data or move to another device.</div>
+        <button class="big-teal-btn" onclick="exportData()" style="margin-top:0">⬇ Export My Data</button>
+      </div>
+    </div>
+
     <div class="settings-section-title">Manual Override</div>
     <div class="settings-card">
       <div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
@@ -657,6 +700,24 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
   <div class="nav-item" id="nav-progress" onclick="switchScreen('progress')"><div class="nav-icon">📈</div><div class="nav-label">Progress</div></div>
   <div class="nav-item" id="nav-settings" onclick="switchScreen('settings')"><div class="nav-icon">⚙️</div><div class="nav-label">Settings</div></div>
 </nav>
+
+<!-- Edit entry bottom sheet -->
+<div class="edit-overlay" id="edit-overlay" onclick="closeEditSheet(event)">
+  <div class="edit-sheet" id="edit-sheet">
+    <div class="edit-sheet-name" id="edit-item-name">Food</div>
+    <div class="edit-sheet-sub" id="edit-item-sub">pts per serving</div>
+    <div class="edit-qty-row">
+      <div class="edit-qty-btn" onclick="editQtyChange(-1)">−</div>
+      <div class="edit-qty-num" id="edit-qty-num">1</div>
+      <div class="edit-qty-btn" onclick="editQtyChange(1)">+</div>
+    </div>
+    <div class="edit-pts-preview" id="edit-pts-preview"></div>
+    <div class="edit-actions">
+      <button class="edit-save-btn" onclick="saveEditEntry()">Save Changes</button>
+      <button class="edit-del-btn" onclick="deleteEditEntry()">Delete</button>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -691,11 +752,13 @@ function getWeekDates() {
 }
 function todayLog() { return weekLog[todayKey]||[]; }
 function todayPoints() { return todayLog().reduce((s,i)=>s+i.totalPts,0); }
-function weeklyUsedThisWeek() {
-  const wk=weekKey(todayKey);
-  return (weeklyUsed[wk]||0);
+function weeklyOverflowTotal() {
+  return getWeekDates().reduce((total, d) => {
+    const dayPts = (weekLog[d]||[]).reduce((s, x) => s + x.totalPts, 0);
+    return total + Math.max(0, dayPts - dailyBudget);
+  }, 0);
 }
-function weekliesLeft() { return Math.max(0, weeklyBudget - weeklyUsedThisWeek()); }
+function weekliesLeft() { return Math.max(0, weeklyBudget - weeklyOverflowTotal()); }
 
 // ══ NAV ════════════════════════════════════════════════════════════════════
 function switchScreen(id) {
@@ -790,10 +853,7 @@ function isZeroPoint(name, cats='', sugar=null) {
   // 1. Never zero if on NOT_ZERO list
   if (NOT_ZERO.some(x => hay.includes(x))) return false;
 
-  // 2. Never zero if sugar is high (>8g strongly suggests flavored/sweetened)
-  if (sugar != null && sugar > 8) return false;
-
-  // 3. Dairy/yogurt/cottage cheese — ONLY zero if explicitly plain + nonfat
+  // 2. Dairy/yogurt/cottage cheese — ONLY zero if explicitly plain + nonfat
   if (ZERO_REQUIRES_QUALIFIER.some(f => hay.includes(f))) {
     const hasQualifier = ZERO_QUALIFIERS.some(q => hay.includes(q));
     if (!hasQualifier) return false;
@@ -805,15 +865,7 @@ function isZeroPoint(name, cats='', sugar=null) {
     return true;
   }
 
-  // 4. Oats — only plain oats, not flavored packets
-  if (hay.includes('oat') || hay.includes('oatmeal') || hay.includes('porridge')) {
-    const flavorWords = ['instant','flavored','maple','brown sugar','apple cinnamon',
-      'honey','raisin','cookie','granola','bar','chocolate'];
-    if (flavorWords.some(f => hay.includes(f))) return false;
-    return true;
-  }
-
-  // 5. Simple egg match — needs to be actual eggs, not egg-containing products
+  // 3. Egg match — needs to be actual eggs, not egg-containing products
   if (hay.includes('egg')) {
     const eggProducts = ['egg noodle','egg pasta','egg roll','scotch egg','egg salad',
       'deviled egg','egg sandwich','egg muffin','egg mcmuffin','egg beater'];
@@ -823,7 +875,7 @@ function isZeroPoint(name, cats='', sugar=null) {
     return false;
   }
 
-  // 6. Simple keyword match for everything else
+  // 4. Simple keyword match for everything else
   return ZERO_SIMPLE.some(kw => hay.includes(kw));
 }
 
@@ -891,7 +943,8 @@ function renderDay() {
   // Weeklies
   document.getElementById('hero-weeklies').textContent = wkLeft;
 
-  // Log list
+  // Recent foods + log list
+  renderRecents();
   renderLogList();
 }
 
@@ -904,14 +957,18 @@ function renderLogList() {
   }
   el.innerHTML = log.map(item => {
     const zero = item.pts === 0;
-    return `<div class="log-item">
+    const srcLabel = item.source === 'ai' ? 'AI estimate'
+      : item.source === 'search' ? 'food search'
+      : item.source === 'recent' ? 'recently logged'
+      : 'barcode scan';
+    return `<div class="log-item" onclick="openEditSheet('${item.id}')">
       <div class="li-icon">${item.icon||'🍽️'}</div>
       <div class="li-info">
         <div class="li-name">${item.name}${zero?'<span class="zero-badge">ZERO</span>':''}</div>
-        <div class="li-meta">${item.qty>1?`×${item.qty} · `:''}${item.source==='ai'?'AI estimate':'barcode scan'}</div>
+        <div class="li-meta">${item.qty>1?`×${item.qty} · `:''}${srcLabel}</div>
       </div>
       <div class="li-pts ${zero?'zero-pts':''}">${item.totalPts === 0 ? '0 ✓' : item.totalPts + ' pts'}</div>
-      <button class="li-del" onclick="removeFromLog('${item.id}')">✕</button>
+      <button class="li-del" onclick="event.stopPropagation();removeFromLog('${item.id}')">✕</button>
     </div>`;
   }).join('');
 }
@@ -922,15 +979,7 @@ function pushToLog(item) {
   if (!weekLog[todayKey]) weekLog[todayKey] = [];
   weekLog[todayKey].unshift(item);
   DB.set('ww_week_log', weekLog);
-
-  // If over daily budget, consume from weeklies
-  const used = todayPoints();
-  if (used > dailyBudget) {
-    const overflow = used - dailyBudget;
-    const wk = weekKey(todayKey);
-    weeklyUsed[wk] = (weeklyUsed[wk]||0) + item.totalPts;
-    DB.set('ww_weekly_used', weeklyUsed);
-  }
+  updateRecents(item);
   renderDay();
 }
 
@@ -1165,8 +1214,24 @@ async function decodePhoto() {
   try {
     await new Promise(res => { if (capturedImg.complete) return res(); capturedImg.onload = res; });
 
-    // Convert image to base64 — scale down aggressively to keep payload small.
-    // 1024px is plenty for Gemini to read a barcode; larger just adds upload time.
+    // Step 1: Try ZXing locally — fast, works offline, no API key needed.
+    // Use the preview <img> element which is already loaded in the DOM.
+    showToast('<span class="spin-sm"></span>Reading barcode…');
+    try {
+      const codeReader = new ZXing.BrowserMultiFormatReader();
+      const blobUrl = document.getElementById('barcode-preview').src;
+      const zxResult = await codeReader.decodeFromImageUrl(blobUrl);
+      if (zxResult && zxResult.text) {
+        retakePhoto();
+        lookupBarcode(zxResult.text);
+        return;
+      }
+    } catch (zxErr) {
+      // ZXing threw NotFoundException or similar — fall through to Gemini.
+    }
+
+    // Step 2: Gemini AI fallback — handles blurry, partial, or unusual barcodes.
+    showToast('<span class="spin-sm"></span>Trying AI scanner…');
     const MAX_DIM = 1024;
     const canvas = document.createElement('canvas');
     let w = capturedImg.naturalWidth, h = capturedImg.naturalHeight;
@@ -1176,11 +1241,8 @@ async function decodePhoto() {
     }
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').drawImage(capturedImg, 0, 0, w, h);
-
     const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
     const base64 = dataUrl.split(',')[1];
-
-    showToast('<span class="spin-sm"></span>Reading barcode…');
 
     const res = await fetch('/api/scan-barcode', {
       method: 'POST',
@@ -1189,11 +1251,10 @@ async function decodePhoto() {
     });
 
     const data = await res.json();
-
     if (!res.ok || data.error) {
       const msg = res.status === 404
-        ? 'No barcode detected — try a clearer photo'
-        : 'Scan failed (' + (data.error || res.status) + ')';
+        ? 'No barcode found — try a closer, clearer photo'
+        : 'Scan failed — check connection and try again';
       showToast(msg, 'err');
       if (btn) { btn.disabled = false; btn.textContent = '🔍 Try Again'; }
       return;
@@ -1381,6 +1442,122 @@ function addAiMealToLog(){
   pushToLog({name:currentAiMeal.mealLabel||'AI Meal',pts:currentAiMeal.totalPoints,qty:1,totalPts:currentAiMeal.totalPoints,icon:'✨',source:'ai'});
   showToast(`+${currentAiMeal.totalPoints} pts added ✓`,'ok');
   setTimeout(()=>switchScreen('day'),600);
+}
+
+// ══ EDIT LOG ENTRY ═══════════════════════════════════════════════════════════
+let editingItemId = null, editQty = 1, editPtsPerServing = 0;
+
+function openEditSheet(id) {
+  const item = (weekLog[todayKey]||[]).find(i => i.id === id);
+  if (!item) return;
+  editingItemId = id;
+  editQty = item.qty || 1;
+  editPtsPerServing = item.pts || 0;
+  document.getElementById('edit-item-name').textContent = item.name;
+  document.getElementById('edit-item-sub').textContent = editPtsPerServing === 0
+    ? 'ZeroPoint™ food'
+    : `${editPtsPerServing} pts per serving`;
+  document.getElementById('edit-qty-num').textContent = editQty;
+  refreshEditPreview();
+  document.getElementById('edit-overlay').classList.add('show');
+}
+
+function closeEditSheet(e) {
+  if (e && e.target !== document.getElementById('edit-overlay')) return;
+  document.getElementById('edit-overlay').classList.remove('show');
+  editingItemId = null;
+}
+
+function editQtyChange(d) {
+  editQty = Math.max(1, editQty + d);
+  document.getElementById('edit-qty-num').textContent = editQty;
+  refreshEditPreview();
+}
+
+function refreshEditPreview() {
+  const total = editPtsPerServing * editQty;
+  const el = document.getElementById('edit-pts-preview');
+  if (editPtsPerServing === 0) {
+    el.innerHTML = '<strong>0 pts</strong> (ZeroPoint™)';
+  } else {
+    el.innerHTML = `<strong>${total} pts</strong> total`;
+  }
+}
+
+function saveEditEntry() {
+  if (!editingItemId || !weekLog[todayKey]) return;
+  const item = weekLog[todayKey].find(i => i.id === editingItemId);
+  if (!item) return;
+  item.qty = editQty;
+  item.totalPts = editPtsPerServing * editQty;
+  DB.set('ww_week_log', weekLog);
+  document.getElementById('edit-overlay').classList.remove('show');
+  editingItemId = null;
+  renderDay();
+  showToast('Entry updated ✓', 'ok');
+}
+
+function deleteEditEntry() {
+  if (!editingItemId) return;
+  weekLog[todayKey] = (weekLog[todayKey]||[]).filter(i => i.id !== editingItemId);
+  DB.set('ww_week_log', weekLog);
+  document.getElementById('edit-overlay').classList.remove('show');
+  editingItemId = null;
+  renderDay();
+  showToast('Entry removed', 'ok');
+}
+
+// ══ RECENT FOODS ══════════════════════════════════════════════════════════════
+function updateRecents(item) {
+  let recents = DB.get('ww_recent_foods', []);
+  recents = recents.filter(r => r.name !== item.name);
+  recents.unshift({ name: item.name, pts: item.pts, icon: item.icon });
+  if (recents.length > 20) recents = recents.slice(0, 20);
+  DB.set('ww_recent_foods', recents);
+}
+
+function renderRecents() {
+  const recents = DB.get('ww_recent_foods', []);
+  const wrap = document.getElementById('recents-wrap');
+  if (!wrap) return;
+  if (!recents.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  document.getElementById('recents-list').innerHTML = recents.slice(0, 8).map(r => {
+    const label = r.name.length > 20 ? r.name.slice(0, 20) + '…' : r.name;
+    const ptsLabel = r.pts === 0 ? '0✓' : r.pts + 'pt';
+    return `<div class="recent-chip" onclick='quickAddRecent(${JSON.stringify({name:r.name,pts:r.pts,icon:r.icon}).replace(/'/g,"&#39;")})'>
+      <span class="recent-chip-icon">${r.icon||'🍽️'}</span>
+      <span class="recent-chip-name">${label}</span>
+      <span class="recent-chip-pts">${ptsLabel}</span>
+    </div>`;
+  }).join('');
+}
+
+function quickAddRecent(item) {
+  pushToLog({ name: item.name, pts: item.pts, qty: 1, totalPts: item.pts, icon: item.icon||'🍽️', source: 'recent' });
+  showToast(`+${item.pts} pts logged ✓`, 'ok');
+}
+
+// ══ DATA EXPORT ══════════════════════════════════════════════════════════════
+function exportData() {
+  const payload = {
+    exported: new Date().toISOString(),
+    app: 'PointScan',
+    dailyBudget,
+    weeklyBudget,
+    foodLog: weekLog,
+    weightLog,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pointscan-${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Data exported ✓', 'ok');
 }
 
 // ══ TOAST ════════════════════════════════════════════════════════════════════
