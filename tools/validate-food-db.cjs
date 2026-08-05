@@ -71,6 +71,7 @@ for (const f of FoodDB.FOODS) {
   }
 
   const itemFlags = [...std.flags];
+  if (std.conditional) itemFlags.push('asks about add-ins before logging');
   for (const rn of E.REVIEW_NOTES) {
     if (f.name.toLowerCase().includes(rn.term)) itemFlags.push('review: ' + rn.note);
   }
@@ -81,7 +82,7 @@ for (const f of FoodDB.FOODS) {
   rows.push({
     name: f.name, serving: f.serving,
     oldPts: oldZero ? '0 (zero)' : String(oldPts),
-    newStd: std.zero ? '0 (zero: ' + std.category + ')' : String(std.points),
+    newStd: std.zero ? '0 (zero: ' + std.category + (std.conditional ? ', asks about add-ins' : '') + ')' : String(std.points),
     newDia: dia.zero ? '0 (zero)' : String(dia.points),
     status: delta ? 'CHANGED' : 'unchanged',
     flags: itemFlags.join('; ') || '—',
@@ -123,6 +124,14 @@ lines.push('');
 if (!flagged.length) lines.push('None.');
 for (const { f, itemFlags } of flagged) {
   lines.push('- **' + f.name + '**: ' + itemFlags.join(' · '));
+}
+lines.push('');
+lines.push('## Conditional preparations (zero when plain — the app asks what went in)');
+lines.push('');
+lines.push('These are zero-point foods where added fat/dairy is common but optional. Instead of guessing, logging one opens a short "what went in?" sheet: plain keeps it at 0, and any add-ins are priced by the same engine.');
+lines.push('');
+for (const cp of E.CONDITIONAL_PREPARATIONS) {
+  lines.push('- ' + cp.match.map(m => '`' + m + '`').join(', ') + ' → _"' + cp.prompt + '"_');
 }
 lines.push('');
 lines.push('## Judgment calls encoded in the engine (conservative: points, not zero)');

@@ -26,10 +26,51 @@ ok(!isZero('Fries'), 'TRAP: fries NOT zero');
 ok(!isZero('Hash browns'), 'TRAP: hash browns NOT zero');
 ok(!isZero('Tater tots'), 'TRAP: tater tots NOT zero');
 ok(!isZero('Potato salad'), 'TRAP: potato salad NOT zero');
-ok(!isZero('Mashed potatoes'), 'TRAP (conservative): mashed potatoes NOT zero');
 ok(!isZero('Loaded potato skins'), 'TRAP: loaded potato skins NOT zero');
 ok(!isZero('Potato gnocchi'), 'TRAP: gnocchi NOT zero');
 ok(isZero('Air-fried potato'), 'air-fried (no oil) potato IS zero');
+
+// ══ CONDITIONAL PREPARATIONS ══
+// Plain mashed potato is just potato → zero. The app asks what went in
+// rather than assuming butter/cream and charging for it.
+{
+  const m = E.zeroCheck('Mashed potatoes', '', 'standard');
+  ok(m.zero === true, 'plain mashed potatoes ARE zero (base food is just potato)');
+  ok(m.conditional === true, 'mashed potatoes flagged conditional (app should ask about add-ins)');
+  ok(typeof m.prompt === 'string' && m.prompt.length > 0, 'conditional match carries a prompt to show the user');
+
+  ok(!isZero('Mashed potatoes with butter'), 'TRAP: mashed potatoes WITH butter NOT zero');
+  ok(!isZero('Garlic mashed potatoes with cream'), 'TRAP: mashed potatoes with cream NOT zero');
+  ok(!isZero('Instant mashed potatoes'), 'TRAP: instant (boxed) mashed potatoes NOT zero');
+  ok(isZero('Instant Pot chicken breast'), '"Instant Pot" is a device, not a processed marker');
+
+  const r = E.zeroCheck('Roasted potatoes', '', 'standard');
+  ok(r.zero && r.conditional, 'roasted potatoes zero + conditional (oil optional)');
+  const s = E.zeroCheck('Scrambled eggs', '', 'standard');
+  ok(s.zero && s.conditional, 'scrambled eggs zero + conditional (butter optional)');
+  const v = E.zeroCheck('Roasted vegetables', '', 'standard');
+  ok(v.zero && v.conditional, 'roasted vegetables zero + conditional');
+  const p = E.zeroCheck('Baked potato', '', 'standard');
+  ok(p.zero && !p.conditional, 'plain baked potato zero and NOT conditional (nothing to ask)');
+  const b = E.zeroCheck('Banana', '', 'standard');
+  ok(b.zero && !b.conditional, 'whole fruit zero and NOT conditional');
+
+  // calcPoints must carry the flag through so the UI can prompt.
+  const cp = E.calcPoints({ cal: 161, sat: 0, sug: 2, addedSug: 0, pro: 4.3, fib: 3.8 }, 'Mashed potatoes', '', 'standard');
+  ok(cp.points === 0 && cp.conditional === true, 'calcPoints propagates conditional flag');
+
+  // Add-in math: plain potato 0 + 1 tsp olive oil ≈ 1 pt.
+  const oil = FoodDB.byId('ai-oliveoil');
+  const oilPts = E.calcPoints({ cal: oil.cal, sat: oil.sat, sug: oil.sug, addedSug: oil.asug, pro: oil.pro, fib: oil.fib }, oil.name, '', 'standard').points;
+  ok(oilPts === 1, '1 tsp olive oil add-in = 1 pt (got ' + oilPts + ')');
+  const butter = FoodDB.byId('ai-butter');
+  const butterPts = E.calcPoints({ cal: butter.cal, sat: butter.sat, sug: butter.sug, addedSug: butter.asug, pro: butter.pro, fib: butter.fib }, butter.name, '', 'standard').points;
+  ok(butterPts === 5, '1 tbsp butter add-in = 5 pts (got ' + butterPts + ')');
+  ok(FoodDB.ADD_INS.every(a => {
+    const r2 = E.calcPoints({ cal: a.cal, sat: a.sat, sug: a.sug, addedSug: a.asug, pro: a.pro, fib: a.fib }, a.name, '', 'standard');
+    return r2.zero === false && r2.points != null;
+  }), 'every add-in is pointed (none can sneak in as zero)');
+}
 
 // ══ TRAP CASES: oats ══
 ok(isZero('Plain rolled oats'), 'plain rolled oats are zero');

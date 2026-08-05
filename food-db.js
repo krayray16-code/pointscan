@@ -35,6 +35,7 @@
     // ── potatoes / starchy / corn (zero standard, pointed diabetic) ──
     { id: 'potato',      name: 'Baked potato (plain)',              icon: '🥔', serving: '1 medium (173g)',  cal: 161, sat: 0,   sug: 2,   asug: 0, pro: 4.3, fib: 3.8 },
     { id: 'sweetpotato', name: 'Sweet potato (baked, plain)',       icon: '🍠', serving: '1 medium (114g)',  cal: 103, sat: 0,   sug: 7.4, asug: 0, pro: 2.3, fib: 3.8 },
+    { id: 'mashedpotato',name: 'Mashed potatoes',                   icon: '🥔', serving: '1 cup (210g)',     cal: 174, sat: 0,   sug: 1.6, asug: 0, pro: 4.2, fib: 3.2 },
     { id: 'corn',        name: 'Corn on the cob (plain)',           icon: '🌽', serving: '1 ear (90g)',      cal: 88,  sat: 0.2, sug: 5,   asug: 0, pro: 3.3, fib: 2 },
     { id: 'peas',        name: 'Green peas (steamed)',              icon: '🟢', serving: '1/2 cup (80g)',    cal: 59,  sat: 0.1, sug: 4.7, asug: 0, pro: 4.1, fib: 4.4 },
     // ── oats & popcorn ──
@@ -43,6 +44,8 @@
     // ── eggs / dairy ──
     { id: 'egg',         name: 'Egg (hard boiled)',                 icon: '🥚', serving: '1 large (50g)',    cal: 72,  sat: 1.6, sug: 0.2, asug: 0, pro: 6.3, fib: 0 },
     { id: 'eggwhites',   name: 'Egg whites',                        icon: '🥚', serving: '2 large (66g)',    cal: 34,  sat: 0,   sug: 0.5, asug: 0, pro: 7.2, fib: 0 },
+    { id: 'scrambledegg',name: 'Scrambled eggs',                    icon: '🍳', serving: '2 large (100g)',   cal: 144, sat: 3.2, sug: 0.4, asug: 0, pro: 12.6,fib: 0 },
+    { id: 'roastedveg',  name: 'Roasted vegetables',                icon: '🥘', serving: '1 cup (150g)',     cal: 70,  sat: 0.1, sug: 5,   asug: 0, pro: 2.5, fib: 4 },
     { id: 'greekyogurt', name: 'Plain nonfat Greek yogurt',         icon: '🥛', serving: '3/4 cup (170g)',   cal: 100, sat: 0,   sug: 6,   asug: 0, pro: 17,  fib: 0 },
     { id: 'cottage',     name: 'Plain nonfat cottage cheese',       icon: '🧀', serving: '1/2 cup (113g)',   cal: 80,  sat: 0,   sug: 4,   asug: 0, pro: 12,  fib: 0 },
     // ── lean proteins ──
@@ -81,6 +84,25 @@
     { id: 'skimmilk',     name: 'Skim milk',                         icon: '🥛', serving: '1 cup (245g)',    cal: 83,  sat: 0.1, sug: 12,  asug: null, pro: 8.3, fib: 0 },
     { id: 'honey',        name: 'Honey',                             icon: '🍯', serving: '1 tbsp (21g)',    cal: 64,  sat: 0,   sug: 17,  asug: 17,  pro: 0.1, fib: 0 },
     { id: 'salsa',        name: 'Salsa (fresh)',                     icon: '🍅', serving: '2 tbsp (32g)',    cal: 10,  sat: 0,   sug: 1,   asug: 0,   pro: 0.5, fib: 0.5 }
+  ];
+
+  // ADD_INS — the things that actually get stirred into an otherwise
+  // zero-point food (mashed potatoes, roasted veg, scrambled eggs). Points are
+  // computed at runtime by the engine, same as any other food, so a plain
+  // potato stays 0 and "potato + 1 tsp olive oil" costs exactly the oil.
+  // Names are deliberately generic ingredient names so the engine's processing
+  // check scores them as the fats/dairy they are.
+  var ADD_INS = [
+    { id: 'ai-butter',     name: 'Butter',            icon: '🧈', serving: '1 tbsp',   cal: 102, sat: 7.3, sug: 0,   asug: 0, pro: 0.1, fib: 0 },
+    { id: 'ai-butter-tsp', name: 'Butter',            icon: '🧈', serving: '1 tsp',    cal: 34,  sat: 2.4, sug: 0,   asug: 0, pro: 0,   fib: 0 },
+    { id: 'ai-oliveoil',   name: 'Olive oil',         icon: '🫒', serving: '1 tsp',    cal: 40,  sat: 0.6, sug: 0,   asug: 0, pro: 0,   fib: 0 },
+    { id: 'ai-oliveoil-tb',name: 'Olive oil',         icon: '🫒', serving: '1 tbsp',   cal: 119, sat: 1.9, sug: 0,   asug: 0, pro: 0,   fib: 0 },
+    { id: 'ai-milk',       name: 'Milk (2%)',         icon: '🥛', serving: '1/4 cup',  cal: 31,  sat: 0.8, sug: 3,   asug: null, pro: 2,  fib: 0 },
+    { id: 'ai-cream',      name: 'Heavy cream',       icon: '🥛', serving: '2 tbsp',   cal: 101, sat: 6.9, sug: 0.8, asug: null, pro: 0.6, fib: 0 },
+    { id: 'ai-sourcream',  name: 'Sour cream',        icon: '🥣', serving: '2 tbsp',   cal: 59,  sat: 3.5, sug: 0.8, asug: null, pro: 0.7, fib: 0 },
+    { id: 'ai-cheese',     name: 'Shredded cheese',   icon: '🧀', serving: '1/4 cup',  cal: 114, sat: 6,   sug: 0.1, asug: 0, pro: 6.5, fib: 0 },
+    { id: 'ai-gravy',      name: 'Gravy',             icon: '🥣', serving: '1/4 cup',  cal: 30,  sat: 0.6, sug: 0.6, asug: 0, pro: 0.7, fib: 0 },
+    { id: 'ai-cookingspray',name:'Cooking spray',     icon: '💨', serving: '1 second', cal: 7,   sat: 0.1, sug: 0,   asug: 0, pro: 0,   fib: 0 }
   ];
 
   // Starter meals — components reference FOOD_DB ids with quantities.
@@ -130,6 +152,7 @@
 
   function byId(id) {
     for (var i = 0; i < FOODS.length; i++) if (FOODS[i].id === id) return FOODS[i];
+    for (var j = 0; j < ADD_INS.length; j++) if (ADD_INS[j].id === id) return ADD_INS[j];
     return null;
   }
 
@@ -139,5 +162,6 @@
     return FOODS.filter(function (f) { return f.name.toLowerCase().indexOf(q) !== -1; });
   }
 
-  return { FOODS: FOODS, STARTER_MEALS: STARTER_MEALS, byId: byId, search: search };
+  return { FOODS: FOODS, ADD_INS: ADD_INS, STARTER_MEALS: STARTER_MEALS,
+    byId: byId, search: search };
 });

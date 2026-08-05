@@ -25,12 +25,15 @@ Invariant checked for every item: **zero points ⇒ matches a zero-point categor
 | Eggplant (roasted) | 1 cup (99g) | 1 | 0 (zero: Non-starchy vegetables) | 0 (zero) | CHANGED | — |
 | Baked potato (plain) | 1 medium (173g) | 0 (zero) | 0 (zero: Potatoes & starchy vegetables) | 4 | unchanged | — |
 | Sweet potato (baked, plain) | 1 medium (114g) | 0 (zero) | 0 (zero: Potatoes & starchy vegetables) | 3 | unchanged | — |
+| Mashed potatoes | 1 cup (210g) | 0 (zero) | 0 (zero: Potatoes & starchy vegetables, asks about add-ins) | 5 | unchanged | asks about add-ins before logging |
 | Corn on the cob (plain) | 1 ear (90g) | 0 (zero) | 0 (zero: Corn) | 2 | unchanged | — |
 | Green peas (steamed) | 1/2 cup (80g) | 2 | 0 (zero: Potatoes & starchy vegetables) | 1 | CHANGED | — |
 | Plain rolled oats (dry) | 1/2 cup (40g) | 4 | 0 (zero: Plain oats & oatmeal) | 4 | CHANGED | — |
 | Air-popped plain popcorn | 3 cups (24g) | 2 | 0 (zero: Air-popped plain popcorn) | 0 (zero) | CHANGED | review: Popcorn is zero ONLY when the name says air-popped; plain "popcorn" without that qualifier gets points. |
 | Egg (hard boiled) | 1 large (50g) | 0 (zero) | 0 (zero: Eggs) | 0 (zero) | unchanged | — |
 | Egg whites | 2 large (66g) | 0 (zero) | 0 (zero: Eggs) | 0 (zero) | unchanged | — |
+| Scrambled eggs | 2 large (100g) | 0 (zero) | 0 (zero: Eggs, asks about add-ins) | 0 (zero) | unchanged | asks about add-ins before logging |
+| Roasted vegetables | 1 cup (150g) | 2 | 0 (zero: Non-starchy vegetables, asks about add-ins) | 0 (zero) | CHANGED | asks about add-ins before logging |
 | Plain nonfat Greek yogurt | 3/4 cup (170g) | 0 (zero) | 0 (zero: Plain nonfat yogurt & cottage cheese) | 1 | unchanged | — |
 | Plain nonfat cottage cheese | 1/2 cup (113g) | 0 (zero) | 0 (zero: Plain nonfat yogurt & cottage cheese) | 1 | unchanged | — |
 | Chicken breast (grilled, skinless) | 4 oz (113g) | 0 (zero) | 0 (zero: Skinless chicken & turkey) | 0 (zero) | unchanged | — |
@@ -68,18 +71,29 @@ Invariant checked for every item: **zero points ⇒ matches a zero-point categor
 | Honey | 1 tbsp (21g) | 4 | 4 | 4 | unchanged | — |
 | Salsa (fresh) | 2 tbsp (32g) | 0 | 0 (zero: Non-starchy vegetables) | 0 (zero) | CHANGED | — |
 
-**11 item(s) changed** vs the old logic; **3 item(s) flagged** for review.
+**12 item(s) changed** vs the old logic; **6 item(s) flagged** for review.
 
 ## Flagged for review
 
+- **Mashed potatoes**: asks about add-ins before logging
 - **Air-popped plain popcorn**: review: Popcorn is zero ONLY when the name says air-popped; plain "popcorn" without that qualifier gets points.
+- **Scrambled eggs**: asks about add-ins before logging
+- **Roasted vegetables**: asks about add-ins before logging
 - **Orange juice**: total-sugar-fallback
 - **Skim milk**: total-sugar-fallback
+
+## Conditional preparations (zero when plain — the app asks what went in)
+
+These are zero-point foods where added fat/dairy is common but optional. Instead of guessing, logging one opens a short "what went in?" sheet: plain keeps it at 0, and any add-ins are priced by the same engine.
+
+- `mashed potato`, `mashed sweet potato`, `mashed cauliflower` → _"Was anything mashed in — butter, milk, cream?"_
+- `roasted potato`, `roasted vegetable`, `roasted veggies`, `grilled vegetable`, `grilled veggies`, `roasted brussels sprout`, `roasted broccoli`, `roasted cauliflower`, `roasted carrot` → _"Roasted or grilled in any oil?"_
+- `scrambled egg`, `omelet`, `omelette`, `egg white omelet` → _"Cooked with butter, oil, cheese or milk?"_
+- `sauteed spinach`, `sauteed mushroom`, `sauteed onion`, `sauteed vegetable`, `sauteed green bean` → _"How much oil or butter went in the pan?"_
 
 ## Judgment calls encoded in the engine (conservative: points, not zero)
 
 - **smoked** — Smoked fish/poultry treated as processed (points). Official WW has sometimes counted smoked fish as zero.
-- **mashed** — Mashed potatoes treated as processed (points) since they usually contain butter/milk. Plain mashed potato would be zero.
 - **date** — Dates matched as fruit (zero) when fresh; "dried dates" are blocked. Most store dates are semi-dried — review.
 - **squash** — All squash (incl. winter/butternut) classified non-starchy (zero on both plans). If you treat winter squash as starchy, it should not be zero on the diabetic plan.
 - **soup** — All soups treated as processed (points) because broth/additions cannot be verified from a name.

@@ -4,7 +4,11 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>PointScan — WW Tracker</title>
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
+<!-- ZXing is vendored, not loaded from a CDN: it is the barcode decoder for
+     iPhone/Safari (no BarcodeDetector there), so a CDN outage or a blocked
+     third-party request would otherwise leave iOS with no scanner at all.
+     @zxing/library 0.19.1 — Apache-2.0, see vendor/zxing-LICENSE -->
+<script src="./vendor/zxing-0.19.1.min.js"></script>
 <script src="./points-engine.js"></script>
 <script src="./food-db.js"></script>
 <style>
@@ -352,6 +356,16 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 .edit-save-btn{flex:1;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:13px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;}
 .edit-del-btn{background:var(--red-light);border:1.5px solid var(--red);color:var(--red);border-radius:99px;padding:13px 18px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;}
 
+/* ── PREP / ADD-INS SHEET ── */
+.prep-plain-row{display:flex;align-items:center;gap:10px;background:var(--green-light);border:1.5px solid var(--green);border-radius:12px;padding:12px 14px;cursor:pointer;}
+.prep-addin-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);}
+.prep-addin-row:last-child{border-bottom:none;}
+.prep-addin-info{flex:1;min-width:0;}
+.prep-addin-name{font-size:.82rem;font-weight:600;}
+.prep-addin-serv{font-size:.66rem;color:var(--ink3);margin-top:1px;}
+.prep-addin-pts{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;color:var(--teal);min-width:32px;text-align:right;}
+#prep-addins{max-height:230px;overflow-y:auto;}
+
 /* ── RECENT FOODS ── */
 .recents-wrap{margin-bottom:14px;}
 .recents-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;color:var(--ink);margin-bottom:8px;}
@@ -460,41 +474,47 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
   <div class="page-header"><h2>Scan Barcode</h2><p id="scan-subtitle">Loading…</p></div>
   <div class="scan-content">
 
-    <!-- Android: Live camera scanner -->
-    <div id="android-scanner" style="display:none">
-      <div class="live-scanner-card" style="display:block">
+    <!-- Live camera scanner — used on BOTH iPhone and Android -->
+    <div id="live-scanner">
+      <div class="live-scanner-card">
         <div id="video-wrap"><video id="scanner-video" autoplay muted playsinline webkit-playsinline></video><div class="scan-overlay"><div class="scan-frame"><div class="scan-line"></div></div></div></div>
         <div class="scanner-idle-inner" id="scanner-idle">
           <div style="font-size:2.2rem">🔍</div>
-          <div style="font-size:.82rem;color:var(--ink2);text-align:center">Point camera at barcode</div>
+          <div style="font-size:.82rem;color:var(--ink2);text-align:center">Point your camera at the barcode</div>
           <button class="scan-start-btn" onclick="startScanner()">Open Camera</button>
         </div>
         <div class="scan-status-bar" id="scan-status-bar">
-          <span style="font-size:.78rem;color:var(--ink2)">Hold steady over barcode…</span>
+          <span style="font-size:.78rem;color:var(--ink2)" id="scan-status-txt">Hold steady over barcode…</span>
           <div style="display:flex;gap:8px;align-items:center;">
             <button id="torch-btn" onclick="toggleTorch()" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.72rem;font-weight:700;color:var(--ink);cursor:pointer;">🔦 Torch</button>
             <button class="scan-stop-btn" onclick="stopScanner()">Stop</button>
           </div>
         </div>
       </div>
+      <div style="text-align:center;margin-bottom:14px;">
+        <span onclick="showPhotoFallback()" style="font-size:.75rem;color:var(--teal);font-weight:700;cursor:pointer;text-decoration:underline;">Camera trouble? Snap a photo instead</span>
+      </div>
     </div>
 
-    <!-- iPhone/Safari: Photo capture (native camera → decode still image) -->
-    <div id="ios-scanner" style="display:none">
+    <!-- Fallback: photo capture (older iOS, in-app browsers, camera blocked) -->
+    <div id="photo-scanner" style="display:none">
       <div class="capture-card">
         <div class="capture-idle" id="capture-idle">
           <div class="capture-idle-icon">📸</div>
-          <div class="capture-idle-txt">Tap below to open camera.<br>Point at the barcode and snap a photo — it reads instantly.</div>
+          <div class="capture-idle-txt" id="capture-idle-txt">Tap below to open your camera.<br>Snap a photo of the barcode — it reads automatically.</div>
           <input type="file" id="barcode-file-input" accept="image/*" capture="environment" onchange="onPhotoSelected(event)"/>
-          <label for="barcode-file-input" class="capture-btn">📷 Scan Barcode</label>
+          <label for="barcode-file-input" class="capture-btn">📷 Take Photo</label>
         </div>
         <div class="photo-preview" id="photo-preview">
           <img id="barcode-preview" src="" alt="barcode"/>
           <div class="preview-btns">
-            <button class="decode-btn" id="decode-btn" onclick="decodePhoto()">🔍 Read Barcode</button>
+            <button class="decode-btn" id="decode-btn" onclick="decodePhoto()">🔍 Read Again</button>
             <button class="retake-btn" onclick="retakePhoto()">↩ Retake</button>
           </div>
         </div>
+      </div>
+      <div style="text-align:center;margin-bottom:14px;">
+        <span onclick="showLiveScanner()" style="font-size:.75rem;color:var(--teal);font-weight:700;cursor:pointer;text-decoration:underline;">↩ Back to live scanner</span>
       </div>
     </div>
 
@@ -800,6 +820,28 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
   </div>
 </div>
 
+<!-- Preparation / add-ins sheet for conditional zero-point foods -->
+<div class="edit-overlay" id="prep-overlay" onclick="closePrepSheet(event)">
+  <div class="edit-sheet" id="prep-sheet">
+    <div class="edit-sheet-name" id="prep-name">Food</div>
+    <div class="edit-sheet-sub" id="prep-prompt">How was it made?</div>
+    <div class="prep-plain-row" onclick="clearAddIns()">
+      <div style="flex:1">
+        <div style="font-size:.85rem;font-weight:700">Plain — nothing added</div>
+        <div style="font-size:.7rem;color:var(--ink2);margin-top:2px">Zero-point food, stays 0 pts</div>
+      </div>
+      <div style="font-family:'Nunito',sans-serif;font-weight:900;font-size:1.3rem;color:var(--green)">0</div>
+    </div>
+    <div style="font-size:.72rem;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 8px">Or add what went in</div>
+    <div id="prep-addins"></div>
+    <div class="mb-total"><span>Total</span><span class="mb-total-num" id="prep-total">0 pts</span></div>
+    <div class="edit-actions" style="margin-top:10px">
+      <button class="edit-save-btn" onclick="confirmPrep()">Log It</button>
+      <button class="retake-btn" onclick="closePrepSheet()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -844,6 +886,11 @@ function weekliesLeft() { return Math.max(0, weeklyBudget - weeklyOverflowTotal(
 
 // ══ NAV ════════════════════════════════════════════════════════════════════
 function switchScreen(id) {
+  // Always release the camera when leaving the scan screen — otherwise the
+  // stream keeps running (battery drain, and iOS leaves the camera indicator
+  // lit until the tab is closed).
+  if (id !== 'scan' && typeof stopScanner === 'function') stopScanner();
+
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
@@ -853,7 +900,22 @@ function switchScreen(id) {
   if (id==='progress') renderProgress();
   if (id==='meals') renderMeals();
   if (id==='settings') renderSettingsExtras();
+  if (id==='scan') autoStartScanner();
   window.scrollTo(0,0);
+}
+
+// Once the user has granted camera access, opening the Scan tab goes straight
+// to a live camera — tap Scan, point at the barcode, done. Before that first
+// grant we wait for an explicit tap so the permission prompt isn't a surprise.
+// The nav tap itself is the user gesture iOS requires for getUserMedia.
+function autoStartScanner() {
+  if (scanning) return;
+  if (document.getElementById('photo-scanner').style.display === 'block') return;
+  // A just-scanned product is on screen waiting to be logged — reopening the
+  // camera over it would throw away the result the user is looking at.
+  if (document.getElementById('prod-result').classList.contains('show')) return;
+  if (!liveScanSupported() || !DB.get('ww_camera_ok', false)) return;
+  startScanner();
 }
 
 // ══ POINTS ENGINE (2025/2026 WW Points program) ═══════════════════════════
@@ -1095,89 +1157,208 @@ function setManualWeekly(){
   renderDay(); showToast(`Weekly allowance: ${n} pts ✓`,'ok');
 }
 
-// ══ SCANNER — Auto-detects Android vs iPhone ═══════════════════════════════
+// ══ SCANNER ════════════════════════════════════════════════════════════════
+// ONE live "point at the barcode" scanner for every platform.
+//
+// Why this used to fail on iPhone: the old build gated live scanning on the
+// native BarcodeDetector API, which only Chrome/Android implements. iOS Safari
+// has no BarcodeDetector, so iPhones were routed to a take-a-photo flow and
+// never got a live camera at all. But Safari has supported getUserMedia since
+// iOS 11 — the camera was always available, we just weren't using it. So now
+// the camera stream is opened the same way everywhere, and only the DECODER
+// differs: native BarcodeDetector where it exists (fastest), ZXing decoding
+// the same live stream everywhere else (iPhone, desktop Safari, Firefox).
+//
+// Formats are limited to the four food barcodes: UPC-A, UPC-E, EAN-13, EAN-8.
+
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const hasBarcodeDetector = 'BarcodeDetector' in window;
-const useNativeScanner = hasBarcodeDetector && !isIOS;
 
-// Show the right scanner UI on page load
+let scanning = false, torchOn = false, mediaStream = null, scanTimer = null;
+let zxReader = null, scanDecoder = null;
+
+function liveScanSupported() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+function zxingReady() { return typeof ZXing !== 'undefined'; }
+
+// Native BarcodeDetector is only useful if it actually supports food formats.
+async function nativeDetectorUsable() {
+  if (!('BarcodeDetector' in window)) return false;
+  try {
+    const supported = await BarcodeDetector.getSupportedFormats();
+    return ['ean_13','upc_a','ean_8','upc_e'].some(f => supported.includes(f));
+  } catch(e) { return false; }
+}
+
+function zxingHints() {
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+    ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E
+  ]);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true); // better in low light / at angles
+  return hints;
+}
+
+function showPhotoFallback(msg) {
+  stopScanner();
+  document.getElementById('live-scanner').style.display = 'none';
+  document.getElementById('photo-scanner').style.display = 'block';
+  if (msg) document.getElementById('capture-idle-txt').innerHTML = esc(msg);
+  document.getElementById('scan-subtitle').textContent = 'Snap a photo of the barcode';
+}
+function showLiveScanner() {
+  document.getElementById('photo-scanner').style.display = 'none';
+  document.getElementById('live-scanner').style.display = 'block';
+  document.getElementById('scan-subtitle').textContent = 'Point your camera at the barcode';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  if (useNativeScanner) {
-    document.getElementById('android-scanner').style.display = 'block';
-    document.getElementById('scan-subtitle').textContent = 'Live camera scanner';
+  if (liveScanSupported()) {
+    showLiveScanner();
   } else {
-    document.getElementById('ios-scanner').style.display = 'block';
-    document.getElementById('scan-subtitle').textContent = 'Snap a photo of the barcode';
+    // Old iOS versions and some in-app browsers (Instagram/Facebook webviews)
+    // don't expose getUserMedia at all — photo capture is the only option.
+    showPhotoFallback('Your browser doesn\'t allow live camera access.<br>Snap a photo of the barcode instead.');
   }
 });
 
-// ── Android: Native BarcodeDetector live scanner ──────────────────────────
-let scanning = false, torchOn = false, mediaStream = null, scanRaf = null;
+// Back camera, with graceful degradation. `exact` gives the rear camera on
+// phones; some tablets/desktops only satisfy `ideal` or nothing at all.
+async function acquireCameraStream() {
+  const attempts = [
+    { video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+    { video: true }
+  ];
+  let lastErr;
+  for (const c of attempts) {
+    try { return await navigator.mediaDevices.getUserMedia(c); }
+    catch (e) {
+      lastErr = e;
+      // A denial won't be fixed by retrying — stop and report it.
+      if (e && (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError' || e.name === 'SecurityError')) throw e;
+    }
+  }
+  throw lastErr;
+}
 
-// Distinguish the camera-permission failure states so users know how to
-// recover (denied vs dismissed vs no camera vs camera busy).
 function cameraErrorMessage(e) {
   const name = e && e.name || '';
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
     return isIOS
-      ? 'Camera blocked. Enable it: Settings → Safari → Camera → Allow, then reload.'
+      ? 'Camera blocked. Tap "aA" in the address bar → Website Settings → Camera → Allow, then reload.'
       : 'Camera blocked. Tap the 🔒 icon in the address bar → Permissions → Camera → Allow, then try again.';
   }
-  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return 'No camera found on this device — use manual barcode entry below.';
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return 'No camera found — use manual entry below.';
   if (name === 'NotReadableError' || name === 'TrackStartError') return 'Camera is in use by another app — close it and try again.';
-  if (name === 'SecurityError') return 'Camera requires a secure (https) connection.';
-  return 'Could not open camera — try again or use manual entry below.';
+  if (name === 'SecurityError') return 'Camera needs a secure (https) connection.';
+  if (name === 'OverconstrainedError') return 'Couldn\'t open the back camera — try the photo option below.';
+  return 'Could not open the camera — try the photo option below.';
 }
 
 async function startScanner() {
-  // If permission is already hard-denied, show recovery steps instead of a
-  // prompt that will never appear. (permissions.query for camera isn't
-  // supported everywhere — fall through to getUserMedia when unavailable.)
+  if (scanning) return;
+  if (!liveScanSupported()) {
+    showPhotoFallback('Your browser doesn\'t allow live camera access.<br>Snap a photo of the barcode instead.');
+    return;
+  }
+
+  // If permission is already hard-denied, show recovery steps rather than a
+  // prompt that will never appear. (Unsupported on iOS — falls through.)
   try {
     if (navigator.permissions && navigator.permissions.query) {
       const st = await navigator.permissions.query({ name: 'camera' });
-      if (st.state === 'denied') {
-        showToast(cameraErrorMessage({ name: 'NotAllowedError' }), 'err');
-        return;
-      }
+      if (st.state === 'denied') { showToast(cameraErrorMessage({ name: 'NotAllowedError' }), 'err'); return; }
     }
-  } catch(e) { /* permissions API unsupported — getUserMedia will prompt */ }
+  } catch(e) { /* permissions API unsupported here — getUserMedia will prompt */ }
+
+  const useNative = await nativeDetectorUsable();
+  if (!useNative && !zxingReady()) {
+    showToast('Scanner library still loading — check your connection', 'err');
+    return;
+  }
 
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    const v = document.getElementById('scanner-video');
+    mediaStream = await acquireCameraStream();
+  } catch(e) {
+    stopScanner();
+    showToast(cameraErrorMessage(e), 'err');
+    // A blocked/absent camera isn't recoverable in place — offer the photo path.
+    if (e && (e.name === 'NotAllowedError' || e.name === 'NotFoundError' || e.name === 'OverconstrainedError')) {
+      showPhotoFallback('Camera unavailable. Snap a photo of the barcode instead.');
+    }
+    return;
+  }
+
+  const v = document.getElementById('scanner-video');
+  document.getElementById('prod-result').classList.remove('show'); // clear previous result
+  document.getElementById('video-wrap').classList.add('active');
+  document.getElementById('scanner-idle').style.display = 'none';
+  document.getElementById('scan-status-bar').classList.add('active');
+  scanning = true;
+  DB.set('ww_camera_ok', true); // remember so we can auto-open next time
+
+  // Continuous autofocus helps a lot at close range; unsupported on iOS.
+  const track = mediaStream.getVideoTracks()[0];
+  try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch(e) {}
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  const tb = document.getElementById('torch-btn');
+  if (tb) tb.style.display = caps.torch ? 'block' : 'none'; // iOS Safari: no torch API
+
+  if (useNative) {
+    scanDecoder = 'native';
+    document.getElementById('scan-status-txt').textContent = 'Hold steady over barcode…';
     v.srcObject = mediaStream;
-    await v.play();
-
-    const track = mediaStream.getVideoTracks()[0];
-    try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch(e) {}
-    const caps = track.getCapabilities ? track.getCapabilities() : {};
-    const tb = document.getElementById('torch-btn');
-    if (tb) tb.style.display = caps.torch ? 'flex' : 'none';
-
-    document.getElementById('video-wrap').classList.add('active');
-    document.getElementById('scanner-idle').style.display = 'none';
-    document.getElementById('scan-status-bar').classList.add('active');
-    scanning = true;
-
-    // Food barcodes only: UPC-A, UPC-E, EAN-13, EAN-8.
+    try { await v.play(); } catch(e) {}
     const det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e'] });
     const tick = async () => {
       if (!scanning) return;
       try {
         const codes = await det.detect(v);
-        if (codes.length) { stopScanner(); lookupBarcode(codes[0].rawValue); return; }
-      } catch(e) {}
-      scanRaf = setTimeout(tick, 200);
+        if (codes.length) { onScanHit(codes[0].rawValue); return; }
+      } catch(e) { /* transient decode error — keep scanning */ }
+      scanTimer = setTimeout(tick, 200);
     };
     tick();
-  } catch(e) {
-    stopScanner();
-    showToast(cameraErrorMessage(e), 'err');
+  } else {
+    // ZXing path — this is what iPhones use. decodeFromStream attaches our
+    // existing stream to the video element (setting the playsinline/muted
+    // attributes iOS needs) and decodes frames continuously.
+    scanDecoder = 'zxing';
+    document.getElementById('scan-status-txt').textContent = 'Hold steady over barcode…';
+    try {
+      zxReader = new ZXing.BrowserMultiFormatReader(zxingHints(), 150);
+      zxReader.timeBetweenDecodingAttempts = 100;
+      zxReader.decodeFromStream(mediaStream, v, (result, err) => {
+        if (!scanning) return;
+        if (result && result.text) onScanHit(result.text);
+        // err is a NotFoundException on most frames — that's normal, ignore.
+      });
+    } catch(e) {
+      stopScanner();
+      showToast('Scanner failed to start — try the photo option', 'err');
+      showPhotoFallback('Live scanning didn\'t start. Snap a photo of the barcode instead.');
+    }
   }
+}
+
+// Single funnel for a successful read, so both decoders behave identically.
+let lastHit = 0;
+function onScanHit(raw) {
+  const now = Date.now();
+  if (now - lastHit < 1500) return; // debounce duplicate frames
+  lastHit = now;
+  const v = PointsEngine.validateBarcode(raw);
+  if (!v.ok) {
+    // Keep scanning — a misread frame shouldn't kill the session.
+    document.getElementById('scan-status-txt').textContent = 'Misread — hold steady and try again…';
+    return;
+  }
+  if (navigator.vibrate) { try { navigator.vibrate(60); } catch(e) {} }
+  stopScanner();
+  lookupBarcode(raw);
 }
 
 async function toggleTorch() {
@@ -1187,14 +1368,26 @@ async function toggleTorch() {
     torchOn = !torchOn;
     await track.applyConstraints({ advanced: [{ torch: torchOn }] });
     const btn = document.getElementById('torch-btn');
-    if (btn) { btn.innerHTML = torchOn ? '🔦 On' : '🔦'; btn.style.background = torchOn ? 'var(--amber)' : ''; btn.style.color = torchOn ? '#fff' : ''; }
-  } catch(e) { showToast('Torch not available', 'err'); }
+    if (btn) {
+      btn.innerHTML = torchOn ? '🔦 On' : '🔦 Torch';
+      btn.style.background = torchOn ? 'var(--amber)' : '';
+      btn.style.color = torchOn ? '#fff' : '';
+    }
+  } catch(e) {
+    torchOn = false;
+    showToast('Torch not available on this device', 'err');
+  }
 }
 
 function stopScanner() {
   scanning = false;
-  if (scanRaf) { clearTimeout(scanRaf); scanRaf = null; }
-  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+  if (zxReader) {
+    try { zxReader.stopContinuousDecode(); } catch(e) {}
+    try { zxReader.reset(); } catch(e) {} // also stops the stream's tracks
+    zxReader = null;
+  }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => { try { t.stop(); } catch(e) {} }); mediaStream = null; }
   const v = document.getElementById('scanner-video');
   if (v) { try { v.srcObject = null; } catch(e) {} }
   const vw = document.getElementById('video-wrap');
@@ -1204,65 +1397,68 @@ function stopScanner() {
   const sb = document.getElementById('scan-status-bar');
   if (sb) sb.classList.remove('active');
   const tb = document.getElementById('torch-btn');
-  if (tb) { tb.style.display = 'none'; tb.innerHTML = '🔦'; torchOn = false; }
+  if (tb) { tb.style.display = 'none'; tb.innerHTML = '🔦 Torch'; tb.style.background = ''; tb.style.color = ''; }
+  torchOn = false;
+  scanDecoder = null;
 }
 
-// ── iPhone: Photo capture → ZXing decode still image ─────────────────────
-let capturedImg = null;
+// Free the camera when the app is backgrounded (iOS suspends the stream and
+// would otherwise leave the camera indicator on) or when leaving the screen.
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopScanner(); });
+window.addEventListener('pagehide', stopScanner);
+
+// ── Photo-capture fallback (older iOS, in-app browsers, blocked camera) ────
+let capturedImg = null, capturedUrl = null, decoding = false;
 
 function onPhotoSelected(e) {
   const file = e.target.files[0];
   if (!file) return;
-  const url = URL.createObjectURL(file);
-  document.getElementById('barcode-preview').src = url;
+  if (capturedUrl) { try { URL.revokeObjectURL(capturedUrl); } catch(err) {} }
+  capturedUrl = URL.createObjectURL(file);
+  document.getElementById('barcode-preview').src = capturedUrl;
   document.getElementById('capture-idle').style.display = 'none';
   document.getElementById('photo-preview').classList.add('show');
   capturedImg = new Image();
-  // Set onload BEFORE src — blob URLs can load synchronously on iOS,
-  // causing the event to fire before the handler is registered.
+  // Register onload BEFORE src: blob URLs can load synchronously on iOS.
   capturedImg.onload = () => decodePhoto();
-  capturedImg.src = url;
+  capturedImg.onerror = () => showToast('Could not read that image — try again', 'err');
+  capturedImg.src = capturedUrl;
 }
 
 function retakePhoto() {
   document.getElementById('capture-idle').style.display = 'flex';
   document.getElementById('photo-preview').classList.remove('show');
   document.getElementById('barcode-file-input').value = '';
+  if (capturedUrl) { try { URL.revokeObjectURL(capturedUrl); } catch(e) {} capturedUrl = null; }
   capturedImg = null;
+  const btn = document.getElementById('decode-btn');
+  if (btn) { btn.disabled = false; btn.textContent = '🔍 Read Again'; }
 }
 
 async function decodePhoto() {
-  if (!capturedImg) return;
+  if (!capturedImg || decoding) return; // guard against the auto-decode racing the button
+  decoding = true;
   const btn = document.getElementById('decode-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Reading…'; }
 
   try {
-    await new Promise(res => { if (capturedImg.complete) return res(); capturedImg.onload = res; });
+    if (!capturedImg.complete) {
+      await new Promise(res => { capturedImg.onload = res; capturedImg.onerror = res; });
+    }
 
-    // Step 1: Try ZXing locally — fast, works offline, no API key needed.
-    // Use the preview <img> element which is already loaded in the DOM.
-    // Guard: the ZXing CDN script may not have loaded (offline first visit).
+    // Step 1: decode locally with ZXing — fast, offline, no API key.
     showToast('<span class="spin-sm"></span>Reading barcode…');
-    if (typeof ZXing !== 'undefined') {
+    if (zxingReady()) {
       try {
-        const hints = new Map();
-        // Food barcodes only: UPC-A, UPC-E, EAN-13, EAN-8.
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-          ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-          ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E
-        ]);
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true); // helps low-light/blurry shots
-        const codeReader = new ZXing.BrowserMultiFormatReader(hints);
-        const blobUrl = document.getElementById('barcode-preview').src;
-        const zxResult = await codeReader.decodeFromImageUrl(blobUrl);
+        const codeReader = new ZXing.BrowserMultiFormatReader(zxingHints());
+        const zxResult = await codeReader.decodeFromImageUrl(document.getElementById('barcode-preview').src);
         if (zxResult && zxResult.text) {
+          const code = zxResult.text;
           retakePhoto();
-          lookupBarcode(zxResult.text);
+          lookupBarcode(code);
           return;
         }
-      } catch (zxErr) {
-        // ZXing threw NotFoundException or similar — fall through to Gemini.
-      }
+      } catch (zxErr) { /* NotFoundException — fall through to the AI reader */ }
     }
 
     if (!navigator.onLine) {
@@ -1271,45 +1467,49 @@ async function decodePhoto() {
       return;
     }
 
-    // Step 2: Gemini AI fallback — handles blurry, partial, or unusual barcodes.
+    // Step 2: Gemini fallback for blurry, partial, or unusual barcodes.
     showToast('<span class="spin-sm"></span>Trying AI scanner…');
     const MAX_DIM = 1024;
     const canvas = document.createElement('canvas');
     let w = capturedImg.naturalWidth, h = capturedImg.naturalHeight;
+    if (!w || !h) { showToast('Could not read that image — try again', 'err'); if (btn) { btn.disabled = false; btn.textContent = '🔍 Try Again'; } return; }
     if (w > MAX_DIM || h > MAX_DIM) {
       const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
       w = Math.round(w * scale); h = Math.round(h * scale);
     }
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').drawImage(capturedImg, 0, 0, w, h);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-    const base64 = dataUrl.split(',')[1];
+    const base64 = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
 
     const res = await fetch('/api/scan-barcode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: base64, mimeType: 'image/jpeg' })
+      body: JSON.stringify({ imageBase64: base64, mimeType: 'image/jpeg' }),
+      signal: timeoutSignal(25000)
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok || data.error) {
-      const msg = res.status === 404
+      showToast(res.status === 404
         ? 'No barcode found — try a closer, clearer photo'
-        : 'Scan failed — check connection and try again';
-      showToast(msg, 'err');
+        : 'Scan failed — check your connection and try again', 'err');
       if (btn) { btn.disabled = false; btn.textContent = '🔍 Try Again'; }
       return;
     }
 
+    const code = data.barcode;
     retakePhoto();
-    lookupBarcode(data.barcode);
+    lookupBarcode(code);
 
   } catch(e) {
-    showToast('Could not read image — please try again', 'err');
-    if (btn) { btn.disabled = false; btn.textContent = '🔍 Read Barcode'; }
+    showToast(e && e.name === 'TimeoutError'
+      ? 'Scan timed out — check your connection'
+      : 'Could not read image — please try again', 'err');
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 Try Again'; }
+  } finally {
+    decoding = false;
   }
 }
-
 // ══ FOOD LOOKUP (Open Food Facts) ══════════════════════════════════════════
 // Every failure path shows a distinct message and never hangs:
 //  - malformed barcode → rejected before any network call
@@ -1351,7 +1551,10 @@ async function lookupBarcode(code){
     };
     // Scanned products go through the exact same engine as everything else —
     // zero-point rules and the processing check cannot be bypassed by scanning.
-    currentProduct.pts=calcWW(currentProduct.cal,currentProduct.sat,currentProduct.sug,currentProduct.pro,currentProduct.fib,currentProduct.name,currentProduct.cats,currentProduct.asug);
+    const pr=PointsEngine.calcPoints({cal:currentProduct.cal,sat:currentProduct.sat,sug:currentProduct.sug,addedSug:currentProduct.asug??null,pro:currentProduct.pro,fib:currentProduct.fib},currentProduct.name,currentProduct.cats,planType);
+    currentProduct.pts=pr.points;
+    currentProduct.conditional=pr.conditional;
+    currentProduct.prompt=pr.prompt;
     currentQty=1; renderProductResult(); hideToast();
     switchScreen('scan');
   }catch(e){
@@ -1388,6 +1591,12 @@ function lookupManual(){
 }
 document.getElementById('manual-barcode').addEventListener('keydown',e=>{if(e.key==='Enter')lookupManual();});
 function changeQty(d){currentQty=Math.max(1,currentQty+d);document.getElementById('qty-display').textContent=currentQty;}
+// Once a scanned item is logged, drop the result card so the next visit to
+// the Scan screen goes straight back to a live camera.
+function clearScanResult(){
+  document.getElementById('prod-result').classList.remove('show');
+  currentProduct=null; currentQty=1;
+}
 function addScanToLog(){
   if(!currentProduct)return;
   if(currentProduct.pts==null){
@@ -1395,10 +1604,20 @@ function addScanToLog(){
     showToast('This product has no nutrition data — points can\'t be verified','err');
     return;
   }
+  const nutrition={cal:currentProduct.cal,sat:currentProduct.sat,sug:currentProduct.sug,asug:currentProduct.asug??null,pro:currentProduct.pro,fib:currentProduct.fib};
+  if (currentProduct.conditional) {
+    openPrepSheet(currentProduct, currentProduct.prompt, res => {
+      const t=res.pts*currentQty;
+      pushToLog({name:res.name,pts:res.pts,qty:currentQty,totalPts:t,icon:'🛒',source:'scan',nutrition});
+      showToast(t===0?`${res.name} logged — 0 pts ✓`:`+${t} pts added ✓`,'ok');
+      clearScanResult();
+    });
+    return;
+  }
   const pts=currentProduct.pts*currentQty;
-  pushToLog({name:currentProduct.name,pts:currentProduct.pts,qty:currentQty,totalPts:pts,icon:'🛒',source:'scan',
-    nutrition:{cal:currentProduct.cal,sat:currentProduct.sat,sug:currentProduct.sug,asug:currentProduct.asug??null,pro:currentProduct.pro,fib:currentProduct.fib}});
+  pushToLog({name:currentProduct.name,pts:currentProduct.pts,qty:currentQty,totalPts:pts,icon:'🛒',source:'scan',nutrition});
   showToast(`+${pts} pts added ✓`,'ok');
+  clearScanResult();
 }
 
 // ══ SEARCH ══════════════════════════════════════════════════════════════════
@@ -1432,7 +1651,7 @@ async function searchFood(){
   FoodDB.search(query).forEach(f=>{
     const r = dbFoodPoints(f);
     appendSearchRow(wrap, { name:f.name, brand:'PointScan foods', servLabel:f.serving,
-      cal:f.cal, pts:r.points, zero:r.zero, icon:f.icon, image:null,
+      cal:f.cal, pts:r.points, zero:r.zero, conditional:r.conditional, prompt:r.prompt, icon:f.icon, image:null,
       nutrition:{cal:f.cal,sat:f.sat,sug:f.sug,asug:f.asug,pro:f.pro,fib:f.fib} });
   });
 
@@ -1452,7 +1671,7 @@ async function searchFood(){
       const fib=srv?n['fiber_serving']:n['fiber_100g'];
       const r=PointsEngine.calcPoints({cal,sat,sug,addedSug:asug??null,pro,fib},p.product_name,cats,planType);
       appendSearchRow(wrap, { name:p.product_name, brand:p.brands||'', servLabel:p.serving_size||(srv?'per serving':'per 100g'),
-        cal, pts:r.points, zero:r.zero, icon:'🥗', image:p.image_small_url||null,
+        cal, pts:r.points, zero:r.zero, conditional:r.conditional, prompt:r.prompt, icon:'🥗', image:p.image_small_url||null,
         nutrition:{cal,sat,sug,asug:asug??null,pro,fib} });
     });
   }catch(e){
@@ -1489,6 +1708,16 @@ function quickAddFromSearch(idx){
   if (!item) return;
   if (item.pts == null) {
     showToast('No nutrition data for this item — points can\'t be verified','err');
+    return;
+  }
+  // Conditional zero food (e.g. mashed potatoes): ask what went in rather
+  // than assuming, then log the base plus exactly the add-ins chosen.
+  if (item.conditional) {
+    openPrepSheet(item, item.prompt, res => {
+      pushToLog({name:res.name,pts:res.pts,qty:1,totalPts:res.pts,icon:item.icon||'🔎',source:'search',nutrition:item.nutrition});
+      showToast(res.pts===0?`${res.name} logged — 0 pts ✓`:`+${res.pts} pts logged ✓`,'ok');
+      setTimeout(()=>switchScreen('day'),500);
+    });
     return;
   }
   pushToLog({name:item.name,pts:item.pts,qty:1,totalPts:item.pts,icon:item.icon||'🔎',source:'search',nutrition:item.nutrition});
@@ -1670,6 +1899,70 @@ function quickAddRecent(i) {
   }
   pushToLog({ name: item.name, pts, qty: 1, totalPts: pts, icon: item.icon||'🍽️', source: 'recent', nutrition: item.nutrition||null });
   showToast(`+${pts} pts logged ✓`, 'ok');
+}
+
+// ══ PREP / ADD-INS SHEET ═════════════════════════════════════════════════════
+// For conditional zero-point foods (plain mashed potato is zero; mashed with
+// butter isn't). Rather than guessing, we ask — and the add-ins are priced by
+// the same engine, so "mashed potatoes + 1 tsp olive oil" costs exactly the
+// oil, without the user having to type the food's name differently.
+let prepItem = null, prepAddIns = {}, prepOnDone = null;
+
+function addInPoints(a) {
+  return PointsEngine.calcPoints(
+    { cal:a.cal, sat:a.sat, sug:a.sug, addedSug:a.asug, pro:a.pro, fib:a.fib },
+    a.name, '', planType).points || 0;
+}
+function prepTotal() {
+  return FoodDB.ADD_INS.reduce((s,a) => s + addInPoints(a) * (prepAddIns[a.id]||0), 0);
+}
+function openPrepSheet(item, prompt, onDone) {
+  prepItem = item; prepAddIns = {}; prepOnDone = onDone;
+  document.getElementById('prep-name').textContent = item.name;
+  document.getElementById('prep-prompt').textContent = prompt || 'How was it made?';
+  renderPrepAddIns();
+  document.getElementById('prep-overlay').classList.add('show');
+}
+function closePrepSheet(e) {
+  if (e && e.target !== document.getElementById('prep-overlay')) return;
+  document.getElementById('prep-overlay').classList.remove('show');
+  prepItem = null; prepAddIns = {}; prepOnDone = null;
+}
+function renderPrepAddIns() {
+  document.getElementById('prep-addins').innerHTML = FoodDB.ADD_INS.map(a => {
+    const qty = prepAddIns[a.id] || 0;
+    const pts = addInPoints(a);
+    return `<div class="prep-addin-row">
+      <span>${esc(a.icon)}</span>
+      <div class="prep-addin-info">
+        <div class="prep-addin-name">${esc(a.name)}</div>
+        <div class="prep-addin-serv">${esc(a.serving)} · ${pts} pt${pts===1?'':'s'} each</div>
+      </div>
+      <div class="mb-qty">
+        <button onclick="prepQty('${esc(a.id)}',-1)">−</button><span>${qty}</span><button onclick="prepQty('${esc(a.id)}',1)">+</button>
+      </div>
+      <div class="prep-addin-pts">${qty ? pts*qty : ''}</div>
+    </div>`;
+  }).join('');
+  const t = prepTotal();
+  document.getElementById('prep-total').textContent = t + ' pts';
+}
+function prepQty(id, d) {
+  prepAddIns[id] = Math.max(0, (prepAddIns[id]||0) + d);
+  if (!prepAddIns[id]) delete prepAddIns[id];
+  renderPrepAddIns();
+}
+function clearAddIns() { prepAddIns = {}; renderPrepAddIns(); }
+function confirmPrep() {
+  if (!prepItem || !prepOnDone) return;
+  const added = FoodDB.ADD_INS.filter(a => prepAddIns[a.id]);
+  const total = prepTotal();
+  const label = added.length
+    ? prepItem.name + ' + ' + added.map(a => a.name.toLowerCase()).join(', ')
+    : prepItem.name;
+  const done = prepOnDone;
+  closePrepSheet();
+  done({ name: label, pts: total });
 }
 
 // ══ MEALS ════════════════════════════════════════════════════════════════════

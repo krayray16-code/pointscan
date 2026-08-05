@@ -71,7 +71,10 @@
     // potato / veg derivatives
     'chip', 'crisps', 'hash brown', 'hash', 'tater tot', 'gnocchi', 'latke',
     'fritter', 'wedges', 'au gratin', 'gratin', 'scalloped', 'loaded',
-    'stuffed', 'smothered', 'casserole', 'creamed', 'mashed',
+    'stuffed', 'smothered', 'casserole', 'creamed',
+    // dehydrated/boxed mixes (deliberately specific — "instant pot" is a
+    // cooking device, not a processed product)
+    'instant mashed', 'instant potato', 'instant oatmeal', 'instant rice',
     // drinks / liquid forms (whole fruit = 0, juice = points)
     'juice', 'nectar', 'soda', 'cola', 'lemonade', 'punch', 'cocktail',
     'smoothie', 'shake', 'milkshake', 'frappe', 'latte', 'mocha',
@@ -175,7 +178,12 @@
         'green bean', 'snap pea', 'snow pea', 'okra', 'pumpkin', 'fennel',
         'kohlrabi', 'rutabaga', 'bok choy', 'collard', 'jicama',
         'mixed greens', 'salad greens', 'side salad', 'garden salad',
-        'cherry tomato', 'pickle', 'sauerkraut', 'salsa']
+        'cherry tomato', 'pickle', 'sauerkraut', 'salsa',
+        // Generic phrasings people actually type. Safe because the processing
+        // check runs first: "vegetable oil", "vegetable soup", "veggie chips"
+        // and "vegetable juice" are all rejected before reaching here.
+        'vegetable', 'veggies', 'veggie', 'mixed vegetable', 'garden vegetable',
+        'crudite']
     },
     {
       id: 'fruit', label: 'Fruits (whole, plain)', zeroOnDiabetic: false,
@@ -252,17 +260,49 @@
     }
   ];
 
+  // ── conditional preparations ────────────────────────────────────────────
+  // These are zero-point foods prepared in a way where added fat or dairy is
+  // COMMON BUT OPTIONAL. Plain mashed potato is just potato — zero. Mashed
+  // potato with butter and cream is not. The name alone can't tell us which,
+  // so instead of guessing (the old build assumed the worst and charged
+  // points for all of them), the engine returns zero AND flags the item as
+  // conditional so the app can ask what went in and add points for exactly
+  // those add-ins.
+  //
+  // A name that already states an add-in ("mashed potatoes with butter")
+  // never reaches here — butter/oil/cream/cheese/gravy are processed markers,
+  // so the food is pointed before the conditional check runs.
+  var CONDITIONAL_PREPARATIONS = [
+    { match: ['mashed potato', 'mashed sweet potato', 'mashed cauliflower'],
+      prompt: 'Was anything mashed in — butter, milk, cream?' },
+    { match: ['roasted potato', 'roasted vegetable', 'roasted veggies',
+              'grilled vegetable', 'grilled veggies', 'roasted brussels sprout',
+              'roasted broccoli', 'roasted cauliflower', 'roasted carrot'],
+      prompt: 'Roasted or grilled in any oil?' },
+    { match: ['scrambled egg', 'omelet', 'omelette', 'egg white omelet'],
+      prompt: 'Cooked with butter, oil, cheese or milk?' },
+    { match: ['sauteed spinach', 'sauteed mushroom', 'sauteed onion',
+              'sauteed vegetable', 'sauteed green bean'],
+      prompt: 'How much oil or butter went in the pan?' }
+  ];
+
   // Foods whose zero/points status is a genuine judgment call under the
   // "plain, whole, unprocessed only" rule. The engine treats them
   // CONSERVATIVELY (points, not zero) and surfaces them for human review.
   var REVIEW_NOTES = [
     { term: 'smoked', note: 'Smoked fish/poultry treated as processed (points). Official WW has sometimes counted smoked fish as zero.' },
-    { term: 'mashed', note: 'Mashed potatoes treated as processed (points) since they usually contain butter/milk. Plain mashed potato would be zero.' },
     { term: 'date', note: 'Dates matched as fruit (zero) when fresh; "dried dates" are blocked. Most store dates are semi-dried — review.' },
     { term: 'squash', note: 'All squash (incl. winter/butternut) classified non-starchy (zero on both plans). If you treat winter squash as starchy, it should not be zero on the diabetic plan.' },
     { term: 'soup', note: 'All soups treated as processed (points) because broth/additions cannot be verified from a name.' },
     { term: 'popcorn', note: 'Popcorn is zero ONLY when the name says air-popped; plain "popcorn" without that qualifier gets points.' }
   ];
+
+  function conditionalFor(hay) {
+    for (var i = 0; i < CONDITIONAL_PREPARATIONS.length; i++) {
+      if (matchAny(hay, CONDITIONAL_PREPARATIONS[i].match)) return CONDITIONAL_PREPARATIONS[i];
+    }
+    return null;
+  }
 
   function normalizeName(s) {
     // "air fried"/"air-fried" (no oil) is an allowed cooking method — rewrite
@@ -332,8 +372,13 @@
         return { zero: false, category: cat.label, categoryId: cat.id,
           reason: 'not zero on diabetic plan' };
       }
+      // Zero — but if it's a preparation where fat/dairy is commonly added,
+      // say so, so the caller can ask instead of guessing.
+      var cond = conditionalFor(hay);
       return { zero: true, category: cat.label, categoryId: cat.id,
-        reason: 'matches "' + hit + '" (' + cat.label + ')' };
+        conditional: !!cond, prompt: cond ? cond.prompt : null,
+        reason: 'matches "' + hit + '" (' + cat.label + ')'
+          + (cond ? ' — plain form is zero; add-ins carry points' : '') };
     }
     return { zero: false, category: null, categoryId: null,
       reason: 'no zero-point category match' };
@@ -356,7 +401,8 @@
     var flags = [];
     if (zc.zero) {
       return { points: 0, zero: true, category: zc.category,
-        categoryId: zc.categoryId, reason: zc.reason, flags: flags };
+        categoryId: zc.categoryId, conditional: !!zc.conditional,
+        prompt: zc.prompt || null, reason: zc.reason, flags: flags };
     }
     if (!n || n.cal == null || isNaN(+n.cal)) {
       flags.push('missing-nutrition');
@@ -412,6 +458,7 @@
     ZERO_CATEGORIES: ZERO_CATEGORIES,
     PROCESSED_MARKERS: PROCESSED_MARKERS,
     CATEGORY_MARKERS: CATEGORY_MARKERS,
+    CONDITIONAL_PREPARATIONS: CONDITIONAL_PREPARATIONS,
     REVIEW_NOTES: REVIEW_NOTES,
     zeroCheck: zeroCheck,
     calcPoints: calcPoints,
