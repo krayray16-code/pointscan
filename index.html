@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>PointScan — WW Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="./points-engine.js"></script>
+<script src="./food-db.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
 
@@ -120,8 +122,6 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 
 /* ── SCAN SCREEN ── */
 .scan-content{padding:16px;}
-.upgrade-tip{background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:12px;padding:10px 14px;font-size:.75rem;color:var(--teal-dark);line-height:1.5;margin-bottom:14px;display:flex;gap:8px;}
-.upgrade-tip a{color:var(--teal-dark);font-weight:700;}
 
 /* Photo capture */
 .capture-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow-sm);}
@@ -140,13 +140,8 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 .decode-btn:disabled{opacity:.5;cursor:not-allowed;}
 .retake-btn{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:11px 16px;font-size:.82rem;font-weight:600;color:var(--ink);cursor:pointer;}
 
-/* Live scanner (Vercel) */
-/*
-[VERCEL_SWAP] STEP 1: Delete the .capture-card div above
-[VERCEL_SWAP] STEP 2: Change display:none → display:block on .live-scanner-card
-[VERCEL_SWAP] STEP 3: Uncomment startScanner/stopScanner in JS
-*/
-.live-scanner-card{display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;}
+/* Live scanner (Android/Chrome) */
+.live-scanner-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;}
 #video-wrap{position:relative;width:100%;aspect-ratio:4/3;background:#000;display:none;}
 #video-wrap.active{display:block;}
 #scanner-video{width:100%;height:100%;object-fit:cover;}
@@ -197,8 +192,42 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 .qty-num{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;min-width:26px;text-align:center;}
 .add-log-btn{flex:1;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:12px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.88rem;cursor:pointer;}
 
-/* Deploy card */
-.deploy-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;font-size:.78rem;line-height:1.9;color:var(--ink2);}
+/* ── MEALS SCREEN ── */
+.meals-content{padding:16px;}
+.meal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:var(--shadow-sm);display:flex;align-items:center;gap:12px;}
+.meal-card-icon{font-size:1.6rem;flex-shrink:0;}
+.meal-card-info{flex:1;min-width:0;}
+.meal-card-name{font-family:'Nunito',sans-serif;font-weight:800;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.meal-card-sub{font-size:.7rem;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.meal-card-pts{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.5rem;color:var(--teal);min-width:36px;text-align:center;}
+.meal-card-pts.zero{color:var(--green);}
+.meal-log-btn{background:var(--teal);color:#fff;border:none;border-radius:99px;padding:8px 14px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.78rem;cursor:pointer;flex-shrink:0;}
+.meal-edit-btn{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:8px 12px;font-size:.72rem;font-weight:700;color:var(--ink2);cursor:pointer;flex-shrink:0;}
+.meal-builder{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+.mb-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;margin-bottom:12px;}
+.mb-comp-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);}
+.mb-comp-row:last-child{border-bottom:none;}
+.mb-comp-name{flex:1;font-size:.82rem;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mb-comp-pts{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;color:var(--teal);min-width:34px;text-align:right;}
+.mb-comp-pts.zero{color:var(--green);}
+.mb-qty{display:flex;align-items:center;gap:4px;}
+.mb-qty button{width:26px;height:26px;border-radius:50%;background:var(--bg);border:1px solid var(--border);cursor:pointer;font-size:.9rem;line-height:1;color:var(--ink);}
+.mb-qty span{font-size:.78rem;font-weight:700;min-width:26px;text-align:center;}
+.mb-total{display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px;font-family:'Nunito',sans-serif;font-weight:800;}
+.mb-total-num{font-size:1.5rem;color:var(--teal);}
+.mb-search-results{max-height:210px;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+.mb-sr-item{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:.8rem;}
+.mb-sr-item:active{background:var(--teal-light);}
+.mb-sr-pts{margin-left:auto;font-family:'Nunito',sans-serif;font-weight:800;color:var(--teal);}
+.mb-sr-pts.zero{color:var(--green);}
+/* Plan toggle */
+.plan-toggle{display:flex;background:var(--bg);border:1.5px solid var(--border);border-radius:99px;overflow:hidden;}
+.plan-toggle button{flex:1;background:none;border:none;padding:9px 8px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.78rem;color:var(--ink2);cursor:pointer;border-radius:99px;transition:all .2s;}
+.plan-toggle button.active{background:var(--teal);color:#fff;}
+/* Review list */
+.review-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:.8rem;}
+.review-item:last-child{border-bottom:none;}
+.review-flag{color:var(--amber);font-size:1rem;flex-shrink:0;}
 
 /* ── SEARCH SCREEN ── */
 .search-content{padding:16px;}
@@ -410,9 +439,9 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
         <div class="qa-btn-icon">✨</div>
         <div class="qa-btn-lbl">AI Meal</div>
       </div>
-      <div class="qa-btn" onclick="switchScreen('progress')">
-        <div class="qa-btn-icon">📈</div>
-        <div class="qa-btn-lbl">Progress</div>
+      <div class="qa-btn" onclick="switchScreen('meals')">
+        <div class="qa-btn-icon">🍱</div>
+        <div class="qa-btn-lbl">Meals</div>
       </div>
     </div>
 
@@ -484,9 +513,9 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
         <div class="prod-pts-row">
           <div class="prod-pts-num" id="pts-display">—</div>
           <div class="prod-pts-info">
-            <div class="prod-pts-lbl" id="pts-lbl">WW PersonalPoints™</div>
+            <div class="prod-pts-lbl" id="pts-lbl">WW Points</div>
             <div class="prod-serv" id="serv-size">—</div>
-            <div class="prod-zero-msg" id="zero-msg" style="display:none">✅ ZeroPoint™ food!</div>
+            <div class="prod-zero-msg" id="zero-msg" style="display:none">✅ Zero-point food!</div>
           </div>
         </div>
         <div class="nutr-row">
@@ -552,12 +581,44 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
     <div class="ai-result-wrap" id="ai-result">
       <div class="ai-result-header">
         <div class="ai-result-pts" id="ai-total-pts">—</div>
-        <div><div class="air-lbl">WW PersonalPoints™ (AI Estimate)</div><div class="air-name" id="ai-meal-label">Meal</div></div>
+        <div><div class="air-lbl">WW Points (AI Estimate)</div><div class="air-name" id="ai-meal-label">Meal</div></div>
       </div>
       <div class="ai-items" id="ai-items"></div>
       <div class="ai-disclaimer">⚠️ AI estimates — use barcode scan for exact points</div>
       <button class="ai-add-meal-btn" onclick="addAiMealToLog()">+ Add to Today's Log</button>
     </div>
+  </div>
+</div>
+
+<!-- ══════════ MEALS ══════════ -->
+<div class="screen" id="screen-meals">
+  <div class="page-header"><h2>My Meals</h2><p>Build meals once, log them in one tap</p></div>
+  <div class="meals-content">
+
+    <!-- Builder (hidden until "New Meal" tapped) -->
+    <div class="meal-builder" id="meal-builder" style="display:none">
+      <div class="mb-title" id="mb-title">New Meal</div>
+      <div class="form-row">
+        <label class="form-label">Meal name</label>
+        <input class="form-input" type="text" id="mb-name" placeholder="e.g. Taco Tuesday" maxlength="60"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Add foods</label>
+        <input class="form-input" type="text" id="mb-search" placeholder="Search foods to add…" autocomplete="off"/>
+        <div class="mb-search-results" id="mb-search-results"></div>
+      </div>
+      <div id="mb-components"></div>
+      <div class="mb-total"><span>Meal total</span><span class="mb-total-num" id="mb-total">0 pts</span></div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="big-teal-btn" style="margin:0;flex:1" onclick="saveMeal()">Save Meal</button>
+        <button class="retake-btn" onclick="cancelMealEdit()">Cancel</button>
+        <button class="edit-del-btn" id="mb-delete" style="display:none;padding:11px 14px" onclick="deleteMeal()">Delete</button>
+      </div>
+      <div style="font-size:.68rem;color:var(--ink3);margin-top:8px;line-height:1.5">Editing a meal only affects future logs — entries already in your day log keep the points they were logged with.</div>
+    </div>
+
+    <button class="big-teal-btn" id="new-meal-btn" onclick="openMealBuilder()" style="margin-bottom:14px;">+ New Meal</button>
+    <div id="meals-list"></div>
   </div>
 </div>
 
@@ -620,6 +681,26 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
         <div class="settings-row-icon">📅</div>
         <div class="settings-row-info"><div class="settings-row-label">Weekly Points</div><div class="settings-row-sub">Extra weekly allowance</div></div>
         <div class="settings-row-val" id="s-weekly-val">28</div>
+      </div>
+    </div>
+
+    <div class="settings-section-title">Plan</div>
+    <div class="settings-card">
+      <div style="padding:14px 16px;">
+        <div class="plan-toggle" id="plan-toggle">
+          <button id="plan-btn-standard" onclick="setPlan('standard')">Standard</button>
+          <button id="plan-btn-diabetic" onclick="setPlan('diabetic')">Diabetic</button>
+        </div>
+        <div style="font-size:.72rem;color:var(--ink2);margin-top:10px;line-height:1.6" id="plan-desc"></div>
+      </div>
+    </div>
+
+    <div class="settings-section-title" id="review-title" style="display:none">⚠️ Needs Review</div>
+    <div class="settings-card" id="review-card" style="display:none">
+      <div id="review-list"></div>
+      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;">
+        <div style="flex:1;font-size:.7rem;color:var(--ink2);line-height:1.5">These saved foods were logged under the old points program and can't be re-verified (no nutrition data stored). Re-add them via Search or Scan to refresh their points.</div>
+        <button class="retake-btn" onclick="clearUnverifiedRecents()">Clear all</button>
       </div>
     </div>
 
@@ -696,7 +777,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
   <div class="nav-item active" id="nav-day" onclick="switchScreen('day')"><div class="nav-icon">📋</div><div class="nav-label">My Day</div></div>
   <div class="nav-item" id="nav-scan" onclick="switchScreen('scan')"><div class="nav-icon">📷</div><div class="nav-label">Scan</div></div>
   <div class="nav-item" id="nav-search" onclick="switchScreen('search')"><div class="nav-icon">🔎</div><div class="nav-label">Search</div></div>
-  <div class="nav-item" id="nav-ai" onclick="switchScreen('ai')"><div class="nav-icon">✨</div><div class="nav-label">AI Meal</div></div>
+  <div class="nav-item" id="nav-meals" onclick="switchScreen('meals')"><div class="nav-icon">🍱</div><div class="nav-label">Meals</div></div>
   <div class="nav-item" id="nav-progress" onclick="switchScreen('progress')"><div class="nav-icon">📈</div><div class="nav-label">Progress</div></div>
   <div class="nav-item" id="nav-settings" onclick="switchScreen('settings')"><div class="nav-icon">⚙️</div><div class="nav-label">Settings</div></div>
 </nav>
@@ -730,20 +811,21 @@ const DB = {
 
 let dailyBudget   = DB.get('ww_daily_budget', 23);
 let weeklyBudget  = DB.get('ww_weekly_budget', 28);
+let planType      = DB.get('ww_plan', 'standard'); // 'standard' | 'diabetic'
 let todayKey      = todayStr();
 let weekLog       = DB.get('ww_week_log', {});   // {dateKey: [{id,name,pts,qty,icon,source}]}
-let weeklyUsed    = DB.get('ww_weekly_used', {}); // {weekKey: number}
 let weightLog     = DB.get('ww_weight_log', []);
+let meals         = DB.get('ww_meals', null);    // [{id,name,icon,components:[…]}]
 let currentProduct= null, currentQty=1, currentAiMeal=null;
+
+// Escape untrusted text (product names come from Open Food Facts / AI) before
+// injecting into innerHTML.
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+let idSeq = 0;
+function newId(){ return Date.now().toString(36) + '-' + (++idSeq) + '-' + Math.random().toString(36).slice(2,6); }
 
 function todayStr() {
   const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-function weekKey(dateStr) {
-  const d=new Date(dateStr+'T00:00:00');
-  const day=d.getDay(); // 0=Sun
-  const mon=new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1));
-  return mon.toISOString().slice(0,10);
 }
 function getWeekDates() {
   const today=new Date(todayKey+'T00:00:00'), day=today.getDay();
@@ -765,128 +847,41 @@ function switchScreen(id) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
-  document.getElementById('nav-'+id).classList.add('active');
+  const navEl = document.getElementById('nav-'+id); // some screens (AI) have no nav item
+  if (navEl) navEl.classList.add('active');
   if (id==='day') renderDay();
   if (id==='progress') renderProgress();
+  if (id==='meals') renderMeals();
+  if (id==='settings') renderSettingsExtras();
   window.scrollTo(0,0);
 }
 
-// ══ WW ZEROPOINT LIST (2024/2025 plan) ════════════════════════════════════
-// IMPORTANT: Only PLAIN, NONFAT/FAT-FREE versions of dairy qualify.
-// Flavored, sweetened, or low-fat (not nonfat) do NOT qualify.
+// ══ POINTS ENGINE (2025/2026 WW Points program) ═══════════════════════════
+// Zero-point classification and the points formula live in points-engine.js
+// (shared with the Node unit tests in tests/). WW's exact Points algorithm is
+// proprietary — the engine uses the closest published nutrition-based
+// approximation (calories, saturated fat, added sugar, protein, fiber).
+// Every calculation respects the active plan (standard vs diabetic).
 
-// These keywords alone are enough to be zero (fruits/veg/proteins)
-const ZERO_SIMPLE = [
-  // Fruits (whole/frozen, no added sugar)
-  'apple','apricot','banana','blackberr','blueberr','cantaloupe','cherry','clementine',
-  'cranberr','date','fig','grape','grapefruit','guava','honeydew','kiwi','lemon','lime',
-  'lychee','mango','nectarine','orange','papaya','passion fruit','peach','pear',
-  'pineapple','plum','pomegranate','raspberry','strawberr','tangerine','watermelon',
-  // Vegetables (all — updated 2024 includes potatoes)
-  'potato','sweet potato','yam','corn','edamame',
-  'broccoli','spinach','kale','lettuce','cabbage','carrot','cucumber','celery','tomato',
-  'zucchini','squash','eggplant','aubergine','bell pepper','onion','garlic','mushroom',
-  'asparagus','artichoke','beet','radish','turnip','parsnip','leek','chard','arugula',
-  'watercress','cauliflower','brussels sprout','green bean','snap pea','snow pea','okra',
-  'pumpkin','plantain','butternut squash','courgette','fennel','kohlrabi','rutabaga',
-  // Legumes
-  'black bean','kidney bean','pinto bean','cannellini bean','navy bean','lima bean',
-  'split pea','mung bean','adzuki bean','fava bean','soybean','chickpea','lentil',
-  'tofu','tempeh',
-  // Lean proteins
-  'chicken breast','chicken thigh','turkey breast','turkey thigh',
-  'skinless chicken','skinless turkey','ground turkey breast',
-  'tilapia','cod','salmon','tuna','shrimp','scallop','crab','lobster','clam','oyster',
-  'mussel','sardine','halibut','flounder','haddock','trout','catfish','pollock',
-  'mahi','snapper','swordfish','whitefish',
-  // Eggs (whole eggs are ZeroPoint on current 2024/2025 plan)
-  'whole egg','hard boiled egg','hard-boiled egg','soft boiled egg','poached egg',
-  'scrambled egg','fried egg','omelette','omelet','egg white',
-];
-
-// These foods only qualify as zero if the name also contains a "plain/nonfat" qualifier
-const ZERO_REQUIRES_QUALIFIER = ['yogurt','cottage cheese','quark'];
-const ZERO_QUALIFIERS = ['plain','nonfat','non-fat','fat-free','fat free','0%','0 %','skim'];
-
-// These always have points — checked BEFORE zero logic
-const NOT_ZERO = [
-  // Processed/fried potato
-  'french frie','potato chip','hash brown','tater tot','potato wedge',
-  'potato bread','potato roll','potato gnocchi','potato soup','mashed potato mix',
-  // Corn products
-  'corn chip','tortilla chip','corn dog','cornbread','corn muffin','popcorn',
-  // Egg products with other ingredients
-  'egg noodle','egg pasta','egg roll','scotch egg','egg salad','deviled egg',
-  'egg mcmuffin','egg sandwich','egg muffin',
-  // Processed chicken/turkey
-  'chicken nugget','fried chicken','breaded chicken','chicken wing','chicken strip',
-  'chicken finger','chicken tender','chicken sandwich','buffalo chicken',
-  'turkey bacon','turkey jerky','deli turkey','turkey sandwich',
-  // Processed fish
-  'fish stick','fish and chip','breaded fish','fish cake','fish sandwich','fish taco',
-  // Fruit products (not whole fruit)
-  'banana chip','banana bread','banana muffin','banana foster','banana pudding',
-  'dried fruit','fruit juice','fruit snack','fruit candy','fruit leather','fruit roll',
-  'apple juice','apple sauce','applesauce','apple pie','apple crisp',
-  'grape juice','mango juice','orange juice','fruit punch','fruit drink',
-  // Any yogurt that is flavored/sweetened
-  'chobani','dannon','yoplait','oikos','siggi','fage 2','fage total 2',
-  'greek yogurt with','yogurt with','fruit yogurt','flavored yogurt',
-  'vanilla yogurt','honey yogurt','strawberry yogurt','blueberry yogurt',
-  'peach yogurt','cherry yogurt','coconut yogurt','chocolate yogurt',
-  'yogurt parfait','yogurt smoothie','yogurt drink','drinkable yogurt',
-  // Cottage cheese that isn't nonfat
-  '2% cottage','4% cottage','small curd cottage cheese 4','lowfat cottage',
-  // Oat products that aren't plain oats
-  'oat cookie','oat bar','granola','oatmeal cookie','oatmeal raisin',
-  'instant oatmeal','flavored oatmeal','maple oatmeal','brown sugar oatmeal',
-  // Legume products
-  'bean dip','refried bean','hummus','bean soup','bean burrito',
-  // Other
-  'pea protein powder','soy sauce','soy milk','edamame hummus',
-];
-
-function isZeroPoint(name, cats='', sugar=null) {
-  if (!name) return false;
-  const hay = (name + ' ' + (cats||'')).toLowerCase();
-
-  // 1. Never zero if on NOT_ZERO list
-  if (NOT_ZERO.some(x => hay.includes(x))) return false;
-
-  // 2. Dairy/yogurt/cottage cheese — ONLY zero if explicitly plain + nonfat
-  if (ZERO_REQUIRES_QUALIFIER.some(f => hay.includes(f))) {
-    const hasQualifier = ZERO_QUALIFIERS.some(q => hay.includes(q));
-    if (!hasQualifier) return false;
-    // Extra check: must also not have flavor indicators
-    const flavorWords = ['vanilla','strawberry','blueberry','peach','honey','maple',
-      'cherry','mango','pineapple','mixed berry','lemon','coconut','caramel',
-      'chocolate','coffee','cinnamon','fruit','flavored','sweetened'];
-    if (flavorWords.some(f => hay.includes(f))) return false;
-    return true;
-  }
-
-  // 3. Egg match — needs to be actual eggs, not egg-containing products
-  if (hay.includes('egg')) {
-    const eggProducts = ['egg noodle','egg pasta','egg roll','scotch egg','egg salad',
-      'deviled egg','egg sandwich','egg muffin','egg mcmuffin','egg beater'];
-    if (eggProducts.some(x => hay.includes(x))) return false;
-    // Raw/whole eggs and simple egg dishes are zero
-    if (/\begg(s)?\b/.test(hay) || hay.includes('egg white')) return true;
-    return false;
-  }
-
-  // 4. Simple keyword match for everything else
-  return ZERO_SIMPLE.some(kw => hay.includes(kw));
+function isZeroPoint(name, cats) {
+  return PointsEngine.zeroCheck(name, cats || '', planType).zero;
 }
 
-// ══ WW POINTS FORMULA ══════════════════════════════════════════════════════
-function calcWW(cal, sat, sug, pro, fib, name, cats) {
-  if (isZeroPoint(name, cats, sug)) return 0;
-  if (cal == null) return null;
-  return Math.max(0, Math.round(
-    (cal * 0.0305) + ((sat||0) * 0.275) + ((sug||0) * 0.12)
-    - ((pro||0) * 0.098) - ((fib||0) * 0.098)
-  ));
+// Back-compat signature used across the app. addedSug is optional; when
+// absent the engine falls back to total sugars (flagged approximation).
+function calcWW(cal, sat, sug, pro, fib, name, cats, addedSug) {
+  return PointsEngine.calcPoints(
+    { cal, sat, sug, addedSug: addedSug ?? null, pro, fib },
+    name, cats || '', planType
+  ).points;
+}
+
+// Points for a local FOOD_DB entry on the current plan.
+function dbFoodPoints(f) {
+  return PointsEngine.calcPoints(
+    { cal: f.cal, sat: f.sat, sug: f.sug, addedSug: f.asug, pro: f.pro, fib: f.fib },
+    f.name, '', planType
+  );
 }
 
 // ══ DAY RENDER ═════════════════════════════════════════════════════════════
@@ -960,22 +955,23 @@ function renderLogList() {
     const srcLabel = item.source === 'ai' ? 'AI estimate'
       : item.source === 'search' ? 'food search'
       : item.source === 'recent' ? 'recently logged'
+      : item.source === 'meal' ? 'saved meal'
       : 'barcode scan';
-    return `<div class="log-item" onclick="openEditSheet('${item.id}')">
-      <div class="li-icon">${item.icon||'🍽️'}</div>
+    return `<div class="log-item" onclick="openEditSheet('${esc(item.id)}')">
+      <div class="li-icon">${esc(item.icon)||'🍽️'}</div>
       <div class="li-info">
-        <div class="li-name">${item.name}${zero?'<span class="zero-badge">ZERO</span>':''}</div>
+        <div class="li-name">${esc(item.name)}${zero?'<span class="zero-badge">ZERO</span>':''}</div>
         <div class="li-meta">${item.qty>1?`×${item.qty} · `:''}${srcLabel}</div>
       </div>
       <div class="li-pts ${zero?'zero-pts':''}">${item.totalPts === 0 ? '0 ✓' : item.totalPts + ' pts'}</div>
-      <button class="li-del" onclick="event.stopPropagation();removeFromLog('${item.id}')">✕</button>
+      <button class="li-del" onclick="event.stopPropagation();removeFromLog('${esc(item.id)}')">✕</button>
     </div>`;
   }).join('');
 }
 
 function pushToLog(item) {
   todayKey = todayStr();
-  item.id = Date.now().toString();
+  item.id = newId();
   if (!weekLog[todayKey]) weekLog[todayKey] = [];
   weekLog[todayKey].unshift(item);
   DB.set('ww_week_log', weekLog);
@@ -1119,7 +1115,35 @@ document.addEventListener('DOMContentLoaded', () => {
 // ── Android: Native BarcodeDetector live scanner ──────────────────────────
 let scanning = false, torchOn = false, mediaStream = null, scanRaf = null;
 
+// Distinguish the camera-permission failure states so users know how to
+// recover (denied vs dismissed vs no camera vs camera busy).
+function cameraErrorMessage(e) {
+  const name = e && e.name || '';
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    return isIOS
+      ? 'Camera blocked. Enable it: Settings → Safari → Camera → Allow, then reload.'
+      : 'Camera blocked. Tap the 🔒 icon in the address bar → Permissions → Camera → Allow, then try again.';
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return 'No camera found on this device — use manual barcode entry below.';
+  if (name === 'NotReadableError' || name === 'TrackStartError') return 'Camera is in use by another app — close it and try again.';
+  if (name === 'SecurityError') return 'Camera requires a secure (https) connection.';
+  return 'Could not open camera — try again or use manual entry below.';
+}
+
 async function startScanner() {
+  // If permission is already hard-denied, show recovery steps instead of a
+  // prompt that will never appear. (permissions.query for camera isn't
+  // supported everywhere — fall through to getUserMedia when unavailable.)
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      const st = await navigator.permissions.query({ name: 'camera' });
+      if (st.state === 'denied') {
+        showToast(cameraErrorMessage({ name: 'NotAllowedError' }), 'err');
+        return;
+      }
+    }
+  } catch(e) { /* permissions API unsupported — getUserMedia will prompt */ }
+
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
@@ -1139,19 +1163,20 @@ async function startScanner() {
     document.getElementById('scan-status-bar').classList.add('active');
     scanning = true;
 
-    const det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39'] });
+    // Food barcodes only: UPC-A, UPC-E, EAN-13, EAN-8.
+    const det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e'] });
     const tick = async () => {
       if (!scanning) return;
       try {
         const codes = await det.detect(v);
         if (codes.length) { stopScanner(); lookupBarcode(codes[0].rawValue); return; }
       } catch(e) {}
-      scanRaf = setTimeout(() => requestAnimationFrame(tick), 200);
+      scanRaf = setTimeout(tick, 200);
     };
-    requestAnimationFrame(tick);
+    tick();
   } catch(e) {
     stopScanner();
-    showToast('Camera denied — allow access in browser settings', 'err');
+    showToast(cameraErrorMessage(e), 'err');
   }
 }
 
@@ -1168,7 +1193,7 @@ async function toggleTorch() {
 
 function stopScanner() {
   scanning = false;
-  if (scanRaf) { clearTimeout(scanRaf); cancelAnimationFrame(scanRaf); scanRaf = null; }
+  if (scanRaf) { clearTimeout(scanRaf); scanRaf = null; }
   if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
   const v = document.getElementById('scanner-video');
   if (v) { try { v.srcObject = null; } catch(e) {} }
@@ -1216,18 +1241,34 @@ async function decodePhoto() {
 
     // Step 1: Try ZXing locally — fast, works offline, no API key needed.
     // Use the preview <img> element which is already loaded in the DOM.
+    // Guard: the ZXing CDN script may not have loaded (offline first visit).
     showToast('<span class="spin-sm"></span>Reading barcode…');
-    try {
-      const codeReader = new ZXing.BrowserMultiFormatReader();
-      const blobUrl = document.getElementById('barcode-preview').src;
-      const zxResult = await codeReader.decodeFromImageUrl(blobUrl);
-      if (zxResult && zxResult.text) {
-        retakePhoto();
-        lookupBarcode(zxResult.text);
-        return;
+    if (typeof ZXing !== 'undefined') {
+      try {
+        const hints = new Map();
+        // Food barcodes only: UPC-A, UPC-E, EAN-13, EAN-8.
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+          ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E
+        ]);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true); // helps low-light/blurry shots
+        const codeReader = new ZXing.BrowserMultiFormatReader(hints);
+        const blobUrl = document.getElementById('barcode-preview').src;
+        const zxResult = await codeReader.decodeFromImageUrl(blobUrl);
+        if (zxResult && zxResult.text) {
+          retakePhoto();
+          lookupBarcode(zxResult.text);
+          return;
+        }
+      } catch (zxErr) {
+        // ZXing threw NotFoundException or similar — fall through to Gemini.
       }
-    } catch (zxErr) {
-      // ZXing threw NotFoundException or similar — fall through to Gemini.
+    }
+
+    if (!navigator.onLine) {
+      showToast('Barcode not readable offline — reconnect and try again', 'err');
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 Try Again'; }
+      return;
     }
 
     // Step 2: Gemini AI fallback — handles blurry, partial, or unusual barcodes.
@@ -1270,12 +1311,31 @@ async function decodePhoto() {
 }
 
 // ══ FOOD LOOKUP (Open Food Facts) ══════════════════════════════════════════
+// Every failure path shows a distinct message and never hangs:
+//  - malformed barcode → rejected before any network call
+//  - no network / timeout → "check connection" message (10s cap)
+//  - no match in database → "not found" message with the code shown
+function timeoutSignal(ms){
+  try { return AbortSignal.timeout(ms); }
+  catch(e){ const c=new AbortController(); setTimeout(()=>c.abort(),ms); return c.signal; }
+}
 async function lookupBarcode(code){
+  code = String(code||'').trim();
+  const v = PointsEngine.validateBarcode(code);
+  if (!v.ok) {
+    const msg = v.reason === 'checksum'
+      ? 'Barcode misread (checksum failed) — try scanning again'
+      : 'That doesn\'t look like a valid UPC/EAN barcode';
+    showToast(msg, 'err');
+    return;
+  }
+  if (!navigator.onLine) { showToast('No connection — reconnect to look up foods', 'err'); return; }
   showToast('<span class="spin-sm"></span>Looking up…');
   try{
-    const res=await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json?fields=product_name,brands,nutriments,serving_size,image_small_url,categories_tags`);
+    const res=await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json?fields=product_name,brands,nutriments,serving_size,image_small_url,categories_tags`,
+      { signal: timeoutSignal(10000) });
     const data=await res.json();
-    if(data.status!==1){showToast('Product not found','err');return;}
+    if(data.status!==1){showToast(`No match for ${code} — try Search instead`,'err');return;}
     const p=data.product,n=p.nutriments||{};
     const cats=(p.categories_tags||[]).join(' ');
     const srv=n['energy-kcal_serving']!=null;
@@ -1284,20 +1344,25 @@ async function lookupBarcode(code){
       cal:srv?n['energy-kcal_serving']:n['energy-kcal_100g'],
       sat:srv?n['saturated-fat_serving']:n['saturated-fat_100g'],
       sug:srv?n['sugars_serving']:n['sugars_100g'],
+      asug:srv?n['added-sugars_serving']:n['added-sugars_100g'],
       pro:srv?n['proteins_serving']:n['proteins_100g'],
       fib:srv?n['fiber_serving']:n['fiber_100g'],
       servLabel:p.serving_size||(srv?'per serving':'per 100g'),srv
     };
-    currentProduct.pts=calcWW(currentProduct.cal,currentProduct.sat,currentProduct.sug,currentProduct.pro,currentProduct.fib,currentProduct.name,currentProduct.cats);
+    // Scanned products go through the exact same engine as everything else —
+    // zero-point rules and the processing check cannot be bypassed by scanning.
+    currentProduct.pts=calcWW(currentProduct.cal,currentProduct.sat,currentProduct.sug,currentProduct.pro,currentProduct.fib,currentProduct.name,currentProduct.cats,currentProduct.asug);
     currentQty=1; renderProductResult(); hideToast();
     switchScreen('scan');
-  }catch{showToast('Network error','err');}
+  }catch(e){
+    showToast(e && e.name === 'TimeoutError' ? 'Lookup timed out — check your connection' : 'Network error — try again','err');
+  }
 }
 
 function renderProductResult(){
   const p=currentProduct;
   document.getElementById('prod-img-wrap').innerHTML=p.image
-    ?`<img class="prod-img" src="${p.image}" onerror="this.outerHTML='<div class=prod-img-ph>🛒</div>'">`
+    ?`<img class="prod-img" src="${esc(p.image)}" onerror="this.outerHTML='<div class=prod-img-ph>🛒</div>'">`
     :`<div class="prod-img-ph">🛒</div>`;
   document.getElementById('prod-name').textContent=p.name;
   document.getElementById('prod-brand').textContent=p.brand;
@@ -1325,76 +1390,108 @@ document.getElementById('manual-barcode').addEventListener('keydown',e=>{if(e.ke
 function changeQty(d){currentQty=Math.max(1,currentQty+d);document.getElementById('qty-display').textContent=currentQty;}
 function addScanToLog(){
   if(!currentProduct)return;
-  const pts=(currentProduct.pts||0)*currentQty;
-  pushToLog({name:currentProduct.name,pts:currentProduct.pts||0,qty:currentQty,totalPts:pts,icon:'🛒',source:'scan'});
+  if(currentProduct.pts==null){
+    // Never silently log an unverifiable product as 0 points.
+    showToast('This product has no nutrition data — points can\'t be verified','err');
+    return;
+  }
+  const pts=currentProduct.pts*currentQty;
+  pushToLog({name:currentProduct.name,pts:currentProduct.pts,qty:currentQty,totalPts:pts,icon:'🛒',source:'scan',
+    nutrition:{cal:currentProduct.cal,sat:currentProduct.sat,sug:currentProduct.sug,asug:currentProduct.asug??null,pro:currentProduct.pro,fib:currentProduct.fib}});
   showToast(`+${pts} pts added ✓`,'ok');
 }
 
 // ══ SEARCH ══════════════════════════════════════════════════════════════════
 document.getElementById('food-search-input').addEventListener('keydown',e=>{if(e.key==='Enter')searchFood();});
 
+let searchAddables = []; // rendered results, referenced by index (no inline JSON)
+
 async function searchFood(){
   const query=document.getElementById('food-search-input').value.trim();
   if(!query){showToast('Enter a food to search','err');return;}
   const btn=document.getElementById('search-btn'); btn.disabled=true; btn.textContent='…';
   document.getElementById('zero-banner').classList.remove('show');
-  document.getElementById('search-results').innerHTML='<div class="search-empty">Searching…</div>';
+  const wrap=document.getElementById('search-results');
+  wrap.innerHTML='<div class="search-empty">Searching…</div>';
+  searchAddables = [];
 
-  // Zero point banner — only show for unambiguous zero foods (not dairy which needs qualifier)
-  const isDairyQuery = ['yogurt','cottage cheese','quark'].some(x => query.toLowerCase().includes(x));
-  const isZero = !isDairyQuery && isZeroPoint(query, '', 0);
-  if (isZero) {
+  // Zero-point banner via the engine (respects plan + processing check).
+  const zc = PointsEngine.zeroCheck(query, '', planType);
+  if (zc.zero) {
     const zb=document.getElementById('zero-banner');
-    zb.innerHTML=`✅ "${query}" is a WW ZeroPoint™ food — always 0 pts!`;
+    zb.innerHTML=`✅ "${esc(query)}" is a zero-point food (${esc(zc.category)}) — 0 pts in its plain, unprocessed form.`;
+    zb.classList.add('show');
+  } else if (zc.categoryId && /diabetic/.test(zc.reason)) {
+    const zb=document.getElementById('zero-banner');
+    zb.innerHTML=`ℹ️ "${esc(query)}" is zero on the standard plan, but has points on your diabetic plan.`;
     zb.classList.add('show');
   }
 
+  // Local database results appear instantly, then Open Food Facts fills in.
+  wrap.innerHTML='';
+  FoodDB.search(query).forEach(f=>{
+    const r = dbFoodPoints(f);
+    appendSearchRow(wrap, { name:f.name, brand:'PointScan foods', servLabel:f.serving,
+      cal:f.cal, pts:r.points, zero:r.zero, icon:f.icon, image:null,
+      nutrition:{cal:f.cal,sat:f.sat,sug:f.sug,asug:f.asug,pro:f.pro,fib:f.fib} });
+  });
+
   try{
-    const res=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=10&fields=id,product_name,brands,nutriments,serving_size,image_small_url,categories_tags`);
+    const res=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=10&fields=id,product_name,brands,nutriments,serving_size,image_small_url,categories_tags`,
+      { signal: timeoutSignal(12000) });
     const data=await res.json();
     const products=(data.products||[]).filter(p=>p.product_name);
-    if(!products.length){document.getElementById('search-results').innerHTML='<div class="search-empty">No results. Try a different spelling.</div>';}
-    else renderSearchResults(products);
-  }catch{document.getElementById('search-results').innerHTML='<div class="search-empty">Network error — try again.</div>';}
+    products.forEach(p=>{
+      const n=p.nutriments||{}, cats=(p.categories_tags||[]).join(' ');
+      const srv=n['energy-kcal_serving']!=null;
+      const cal=srv?n['energy-kcal_serving']:n['energy-kcal_100g'];
+      const sat=srv?n['saturated-fat_serving']:n['saturated-fat_100g'];
+      const sug=srv?n['sugars_serving']:n['sugars_100g'];
+      const asug=srv?n['added-sugars_serving']:n['added-sugars_100g'];
+      const pro=srv?n['proteins_serving']:n['proteins_100g'];
+      const fib=srv?n['fiber_serving']:n['fiber_100g'];
+      const r=PointsEngine.calcPoints({cal,sat,sug,addedSug:asug??null,pro,fib},p.product_name,cats,planType);
+      appendSearchRow(wrap, { name:p.product_name, brand:p.brands||'', servLabel:p.serving_size||(srv?'per serving':'per 100g'),
+        cal, pts:r.points, zero:r.zero, icon:'🥗', image:p.image_small_url||null,
+        nutrition:{cal,sat,sug,asug:asug??null,pro,fib} });
+    });
+  }catch(e){
+    if(!wrap.children.length) wrap.innerHTML='<div class="search-empty">Network error — check your connection and try again.</div>';
+  }
+  if(!wrap.children.length) wrap.innerHTML='<div class="search-empty">No results. Try a different spelling.</div>';
   btn.disabled=false; btn.textContent='Search';
 }
 
-function renderSearchResults(products){
-  const wrap=document.getElementById('search-results');
-  wrap.innerHTML='';
-  products.forEach(p=>{
-    const n=p.nutriments||{}, cats=(p.categories_tags||[]).join(' ');
-    const srv=n['energy-kcal_serving']!=null;
-    const cal=srv?n['energy-kcal_serving']:n['energy-kcal_100g'];
-    const sat=srv?n['saturated-fat_serving']:n['saturated-fat_100g'];
-    const sug=srv?n['sugars_serving']:n['sugars_100g'];
-    const pro=srv?n['proteins_serving']:n['proteins_100g'];
-    const fib=srv?n['fiber_serving']:n['fiber_100g'];
-    const pts=calcWW(cal,sat,sug,pro,fib,p.product_name,cats);    const zero=pts===0;
-    const cls=zero?'zero':pts>12?'high':pts>7?'med':'';
-    const servLabel=p.serving_size||(srv?'per serving':'per 100g');
-
-    const el=document.createElement('div'); el.className='sri';
-    el.innerHTML=`
-      ${p.image_small_url
-        ?`<img class="sri-thumb" src="${p.image_small_url}" onerror="this.outerHTML='<div class=sri-thumb-ph>🥗</div>'">`
-        :`<div class="sri-thumb-ph">🥗</div>`}
-      <div class="sri-info">
-        <div class="sri-name">${p.product_name}${zero?'<span class="zero-badge">ZERO</span>':''}</div>
-        ${p.brands?`<div class="sri-brand">${p.brands}</div>`:''}
-        <div class="sri-cal">${servLabel}${cal!=null?` · ${Math.round(cal)} cal`:''}</div>
-      </div>
-      <div class="sri-pts-col">
-        <div class="sri-pts-num ${cls}">${pts??'?'}</div>
-        <div class="sri-pts-lbl">pts</div>
-      </div>
-      <button class="sri-add" onclick='quickAddFromSearch(${JSON.stringify({name:p.product_name,pts:pts||0}).replace(/'/g,"&#39;")})'>+ Log</button>`;
-    wrap.appendChild(el);
-  });
+function appendSearchRow(wrap, item){
+  const idx = searchAddables.push(item) - 1;
+  const pts = item.pts;
+  const cls = item.zero?'zero':pts==null?'':pts>12?'high':pts>7?'med':'';
+  const el=document.createElement('div'); el.className='sri';
+  el.innerHTML=`
+    ${item.image
+      ?`<img class="sri-thumb" src="${esc(item.image)}" onerror="this.outerHTML='<div class=sri-thumb-ph>🥗</div>'">`
+      :`<div class="sri-thumb-ph">${esc(item.icon)||'🥗'}</div>`}
+    <div class="sri-info">
+      <div class="sri-name">${esc(item.name)}${item.zero?'<span class="zero-badge">ZERO</span>':''}</div>
+      ${item.brand?`<div class="sri-brand">${esc(item.brand)}</div>`:''}
+      <div class="sri-cal">${esc(item.servLabel)}${item.cal!=null?` · ${Math.round(item.cal)} cal`:''}</div>
+    </div>
+    <div class="sri-pts-col">
+      <div class="sri-pts-num ${cls}">${pts??'?'}</div>
+      <div class="sri-pts-lbl">${pts==null?'review':'pts'}</div>
+    </div>
+    <button class="sri-add" onclick="quickAddFromSearch(${idx})">+ Log</button>`;
+  wrap.appendChild(el);
 }
 
-function quickAddFromSearch(item){
-  pushToLog({name:item.name,pts:item.pts,qty:1,totalPts:item.pts,icon:'🔎',source:'search'});
+function quickAddFromSearch(idx){
+  const item = searchAddables[idx];
+  if (!item) return;
+  if (item.pts == null) {
+    showToast('No nutrition data for this item — points can\'t be verified','err');
+    return;
+  }
+  pushToLog({name:item.name,pts:item.pts,qty:1,totalPts:item.pts,icon:item.icon||'🔎',source:'search',nutrition:item.nutrition});
   showToast(`+${item.pts} pts logged ✓`,'ok');
   setTimeout(()=>switchScreen('day'),500);
 }
@@ -1411,11 +1508,22 @@ async function analyzeMeal(){
     const res = await fetch('/api/ai-meal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mealText: text })
+      body: JSON.stringify({ mealText: text, plan: planType }),
+      signal: timeoutSignal(25000)
     });
     if (!res.ok) throw new Error(await res.text());
     currentAiMeal = await res.json();
     if (currentAiMeal.error) throw new Error(currentAiMeal.error);
+    // Re-verify every AI item locally: the AI supplies nutrition estimates,
+    // but zero-point status and points come from OUR engine (same rules as
+    // scan/search — the AI cannot bypass the processing check).
+    currentAiMeal.items = (currentAiMeal.items||[]).map(item => {
+      const r = PointsEngine.calcPoints(
+        { cal:item.calories, sat:item.saturatedFat, sug:item.sugar, addedSug:null, pro:item.protein, fib:item.fiber },
+        item.name, '', planType);
+      return { ...item, isZero: r.zero, points: r.points ?? item.points ?? 0 };
+    });
+    currentAiMeal.totalPoints = currentAiMeal.items.reduce((s,i)=>s+(i.points||0),0);
     renderAiResult(currentAiMeal);
   }catch(e){
     showToast('AI estimation failed — ' + (e?.message || 'check connection'), 'err');
@@ -1431,8 +1539,8 @@ function renderAiResult(meal){
   document.getElementById('ai-items').innerHTML=(meal.items||[]).map(item=>`
     <div class="ai-item-row">
       <div style="font-size:1rem">${item.isZero?'✅':'🍽️'}</div>
-      <div style="flex:1"><div class="ai-item-name">${item.name}${item.isZero?'<span class="zero-badge">ZERO</span>':''}</div><div class="ai-item-cal">${item.calories} cal · ${item.protein}g protein · ${item.note||''}</div></div>
-      <div class="ai-item-pts-col">${item.points} pts</div>
+      <div style="flex:1"><div class="ai-item-name">${esc(item.name)}${item.isZero?'<span class="zero-badge">ZERO</span>':''}</div><div class="ai-item-cal">${esc(item.calories)} cal · ${esc(item.protein)}g protein · ${esc(item.note||'')}</div></div>
+      <div class="ai-item-pts-col">${esc(item.points)} pts</div>
     </div>`).join('');
   document.getElementById('ai-result').classList.add('show');
 }
@@ -1508,12 +1616,21 @@ function deleteEditEntry() {
 }
 
 // ══ RECENT FOODS ══════════════════════════════════════════════════════════════
+// Entries saved by this version carry v:2 (verified against the 2025/2026
+// engine, with nutrition when available). Older entries were computed under
+// the retired PersonalPoints-era logic and their nutrition wasn't stored, so
+// their points CANNOT be re-verified — they're flagged in Settings → Needs
+// Review instead of being silently kept or silently recalculated.
 function updateRecents(item) {
   let recents = DB.get('ww_recent_foods', []);
   recents = recents.filter(r => r.name !== item.name);
-  recents.unshift({ name: item.name, pts: item.pts, icon: item.icon });
+  recents.unshift({ name: item.name, pts: item.pts, icon: item.icon, v: 2, nutrition: item.nutrition || null });
   if (recents.length > 20) recents = recents.slice(0, 20);
   DB.set('ww_recent_foods', recents);
+}
+
+function unverifiedRecents() {
+  return DB.get('ww_recent_foods', []).filter(r => r.v !== 2);
 }
 
 function renderRecents() {
@@ -1522,20 +1639,243 @@ function renderRecents() {
   if (!wrap) return;
   if (!recents.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  document.getElementById('recents-list').innerHTML = recents.slice(0, 8).map(r => {
+  document.getElementById('recents-list').innerHTML = recents.slice(0, 8).map((r, i) => {
     const label = r.name.length > 20 ? r.name.slice(0, 20) + '…' : r.name;
-    const ptsLabel = r.pts === 0 ? '0✓' : r.pts + 'pt';
-    return `<div class="recent-chip" onclick='quickAddRecent(${JSON.stringify({name:r.name,pts:r.pts,icon:r.icon}).replace(/'/g,"&#39;")})'>
-      <span class="recent-chip-icon">${r.icon||'🍽️'}</span>
-      <span class="recent-chip-name">${label}</span>
+    const legacy = r.v !== 2;
+    const ptsLabel = legacy ? '⚠' : (r.pts === 0 ? '0✓' : r.pts + 'pt');
+    return `<div class="recent-chip" onclick="quickAddRecent(${i})" title="${legacy?'Logged under the old points program — points unverified':''}">
+      <span class="recent-chip-icon">${esc(r.icon)||'🍽️'}</span>
+      <span class="recent-chip-name">${esc(label)}</span>
       <span class="recent-chip-pts">${ptsLabel}</span>
     </div>`;
   }).join('');
 }
 
-function quickAddRecent(item) {
-  pushToLog({ name: item.name, pts: item.pts, qty: 1, totalPts: item.pts, icon: item.icon||'🍽️', source: 'recent' });
-  showToast(`+${item.pts} pts logged ✓`, 'ok');
+function quickAddRecent(i) {
+  const recents = DB.get('ww_recent_foods', []);
+  const item = recents[i];
+  if (!item) return;
+  if (item.v !== 2) {
+    // Old-program entry with no stored nutrition — points can't be verified.
+    showToast('⚠ Saved under the old points program — re-add via Search or Scan to verify', 'err');
+    return;
+  }
+  // Recompute from stored nutrition when we have it, so plan changes and
+  // engine fixes apply to re-logs (not just to first-time logs).
+  let pts = item.pts;
+  if (item.nutrition) {
+    const n = item.nutrition;
+    const r = PointsEngine.calcPoints({ cal:n.cal, sat:n.sat, sug:n.sug, addedSug:n.asug??null, pro:n.pro, fib:n.fib }, item.name, '', planType);
+    if (r.points != null) pts = r.points;
+  }
+  pushToLog({ name: item.name, pts, qty: 1, totalPts: pts, icon: item.icon||'🍽️', source: 'recent', nutrition: item.nutrition||null });
+  showToast(`+${pts} pts logged ✓`, 'ok');
+}
+
+// ══ MEALS ════════════════════════════════════════════════════════════════════
+// A meal is a named list of components with quantities. Components store a
+// nutrition SNAPSHOT (not a live reference), and logging a meal writes a
+// frozen copy of its computed points into the day log — so editing or
+// deleting a meal later never changes points already logged.
+// Meal points = Σ round(component per-serving points × qty); zero-point
+// components contribute 0 at any quantity.
+
+function seedMeals(){
+  if (meals !== null) return;
+  meals = FoodDB.STARTER_MEALS.map(m => ({
+    id: m.id, name: m.name, icon: m.icon, starter: true,
+    components: m.components.map(c => snapshotComponent(FoodDB.byId(c.foodId), c.qty))
+  }));
+  DB.set('ww_meals', meals);
+}
+function snapshotComponent(f, qty){
+  return { name: f.name, icon: f.icon, serving: f.serving, qty: qty,
+    nutrition: { cal:f.cal, sat:f.sat, sug:f.sug, asug:f.asug, pro:f.pro, fib:f.fib } };
+}
+function componentPoints(c){
+  const n = c.nutrition || {};
+  const r = PointsEngine.calcPoints(
+    { cal:n.cal, sat:n.sat, sug:n.sug, addedSug:n.asug??null, pro:n.pro, fib:n.fib },
+    c.name, '', planType);
+  if (r.zero) return { pts: 0, zero: true, per: 0 };
+  const per = r.points == null ? 0 : r.points;
+  return { pts: Math.round(per * (c.qty||1)), zero: false, per, unverified: r.points == null };
+}
+function mealTotal(m){ return m.components.reduce((s,c)=>s+componentPoints(c).pts,0); }
+
+function renderMeals(){
+  const wrap = document.getElementById('meals-list');
+  if (!meals || !meals.length) {
+    wrap.innerHTML = '<div class="search-empty">No meals yet. Tap “New Meal” to build one.</div>';
+    return;
+  }
+  wrap.innerHTML = meals.map((m,i)=>{
+    const total = mealTotal(m);
+    const compStr = m.components.map(c=>`${esc(c.name)}${c.qty!==1?` ×${c.qty}`:''}`).join(', ');
+    return `<div class="meal-card">
+      <div class="meal-card-icon">${esc(m.icon)||'🍱'}</div>
+      <div class="meal-card-info">
+        <div class="meal-card-name">${esc(m.name)}</div>
+        <div class="meal-card-sub">${compStr}</div>
+      </div>
+      <div class="meal-card-pts ${total===0?'zero':''}">${total}</div>
+      <button class="meal-log-btn" onclick="logMeal(${i})">+ Log</button>
+      <button class="meal-edit-btn" onclick="openMealBuilder(${i})">Edit</button>
+    </div>`;
+  }).join('');
+}
+
+function logMeal(i){
+  const m = meals[i];
+  if (!m) return;
+  const total = mealTotal(m); // frozen at log time
+  pushToLog({ name: m.name, pts: total, qty: 1, totalPts: total, icon: m.icon||'🍱', source: 'meal', mealId: m.id });
+  showToast(total===0 ? `${m.name} logged — 0 pts ✓` : `+${total} pts — ${m.name} ✓`, 'ok');
+  setTimeout(()=>switchScreen('day'), 500);
+}
+
+// ── builder ──
+let builderMeal = null;     // working copy
+let builderIndex = null;    // index in meals[] when editing, null when new
+
+function openMealBuilder(i){
+  if (typeof i === 'number' && meals[i]) {
+    builderIndex = i;
+    builderMeal = JSON.parse(JSON.stringify(meals[i]));
+    document.getElementById('mb-title').textContent = 'Edit Meal';
+    document.getElementById('mb-delete').style.display = 'block';
+  } else {
+    builderIndex = null;
+    builderMeal = { id: 'meal-' + newId(), name: '', icon: '🍱', components: [] };
+    document.getElementById('mb-title').textContent = 'New Meal';
+    document.getElementById('mb-delete').style.display = 'none';
+  }
+  document.getElementById('mb-name').value = builderMeal.name;
+  document.getElementById('mb-search').value = '';
+  document.getElementById('mb-search-results').innerHTML = '';
+  document.getElementById('meal-builder').style.display = 'block';
+  document.getElementById('new-meal-btn').style.display = 'none';
+  renderBuilderComponents();
+  window.scrollTo(0,0);
+}
+function cancelMealEdit(){
+  builderMeal = null; builderIndex = null;
+  document.getElementById('meal-builder').style.display = 'none';
+  document.getElementById('new-meal-btn').style.display = 'block';
+}
+function renderBuilderComponents(){
+  const wrap = document.getElementById('mb-components');
+  if (!builderMeal.components.length) {
+    wrap.innerHTML = '<div style="font-size:.78rem;color:var(--ink3);text-align:center;padding:12px">No foods yet — search above to add.</div>';
+  } else {
+    wrap.innerHTML = builderMeal.components.map((c,i)=>{
+      const p = componentPoints(c);
+      return `<div class="mb-comp-row">
+        <span>${esc(c.icon)||'🍽️'}</span>
+        <div class="mb-comp-name">${esc(c.name)}<div style="font-size:.65rem;color:var(--ink3);font-weight:400">${esc(c.serving||'')}</div></div>
+        <div class="mb-qty">
+          <button onclick="builderQty(${i},-0.5)">−</button><span>${c.qty}</span><button onclick="builderQty(${i},0.5)">+</button>
+        </div>
+        <div class="mb-comp-pts ${p.zero?'zero':''}">${p.zero?'0✓':p.pts}</div>
+        <button class="li-del" onclick="builderRemove(${i})">✕</button>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('mb-total').textContent = mealTotal(builderMeal) + ' pts';
+}
+function builderQty(i,d){
+  const c = builderMeal.components[i]; if (!c) return;
+  c.qty = Math.max(0.5, Math.round((c.qty + d) * 2) / 2);
+  renderBuilderComponents();
+}
+function builderRemove(i){
+  builderMeal.components.splice(i,1);
+  renderBuilderComponents();
+}
+function builderAddFood(foodId){
+  const f = FoodDB.byId(foodId); if (!f || !builderMeal) return;
+  builderMeal.components.push(snapshotComponent(f, 1));
+  document.getElementById('mb-search').value = '';
+  document.getElementById('mb-search-results').innerHTML = '';
+  renderBuilderComponents();
+}
+document.getElementById('mb-search').addEventListener('input', function(){
+  const q = this.value.trim();
+  const wrap = document.getElementById('mb-search-results');
+  if (q.length < 2) { wrap.innerHTML=''; return; }
+  const hits = FoodDB.search(q).slice(0, 8);
+  wrap.innerHTML = hits.map(f=>{
+    const r = dbFoodPoints(f);
+    return `<div class="mb-sr-item" onclick="builderAddFood('${esc(f.id)}')">
+      <span>${esc(f.icon)}</span><span>${esc(f.name)}</span>
+      <span style="font-size:.68rem;color:var(--ink3)">${esc(f.serving)}</span>
+      <span class="mb-sr-pts ${r.zero?'zero':''}">${r.zero?'0✓':r.points}</span>
+    </div>`;
+  }).join('') || '<div style="font-size:.75rem;color:var(--ink3);padding:6px">No matches in the food database.</div>';
+});
+function saveMeal(){
+  if (!builderMeal) return;
+  const name = document.getElementById('mb-name').value.trim();
+  if (!name) { showToast('Give the meal a name','err'); return; }
+  if (!builderMeal.components.length) { showToast('Add at least one food','err'); return; }
+  builderMeal.name = name;
+  if (builderIndex != null) meals[builderIndex] = builderMeal;
+  else meals.push(builderMeal);
+  DB.set('ww_meals', meals);
+  cancelMealEdit();
+  renderMeals();
+  showToast('Meal saved ✓','ok');
+}
+function deleteMeal(){
+  if (builderIndex == null) { cancelMealEdit(); return; }
+  if (!confirm('Delete this meal? (Past logs keep their points.)')) return;
+  meals.splice(builderIndex,1);
+  DB.set('ww_meals', meals);
+  cancelMealEdit();
+  renderMeals();
+  showToast('Meal deleted','ok');
+}
+
+// ══ SETTINGS: PLAN TOGGLE + REVIEW LIST ══════════════════════════════════════
+function setPlan(p){
+  if (p !== 'standard' && p !== 'diabetic') return;
+  planType = p;
+  DB.set('ww_plan', p);
+  renderSettingsExtras();
+  renderDay();
+  showToast(p === 'diabetic'
+    ? 'Diabetic plan: fruit, corn, potatoes, oats & yogurt now carry points'
+    : 'Standard plan active ✓', 'ok');
+}
+function renderSettingsExtras(){
+  const std = document.getElementById('plan-btn-standard');
+  const dia = document.getElementById('plan-btn-diabetic');
+  if (std) std.classList.toggle('active', planType === 'standard');
+  if (dia) dia.classList.toggle('active', planType === 'diabetic');
+  const desc = document.getElementById('plan-desc');
+  if (desc) desc.textContent = planType === 'diabetic'
+    ? 'Diabetic plan: fruit, corn, potatoes, starchy vegetables, oats, yogurt and cottage cheese are NOT zero-point — their points come from nutrition. Applies to new calculations; already-logged entries keep their points.'
+    : 'Standard 2025/2026 plan: fruits, non-starchy vegetables, eggs, fish & shellfish, skinless poultry, lean beef & pork, legumes, tofu & tempeh, plain nonfat yogurt & cottage cheese, corn, potatoes, plain oats, and air-popped popcorn are zero-point in their plain, unprocessed forms.';
+
+  const un = unverifiedRecents();
+  const title = document.getElementById('review-title');
+  const card = document.getElementById('review-card');
+  if (!title || !card) return;
+  if (!un.length) { title.style.display='none'; card.style.display='none'; return; }
+  title.style.display='block'; card.style.display='block';
+  document.getElementById('review-list').innerHTML = un.map(r=>`
+    <div class="review-item">
+      <span class="review-flag">⚠️</span>
+      <div style="flex:1">${esc(r.name)}</div>
+      <div style="color:var(--ink3);font-size:.7rem">old: ${r.pts} pts (unverified)</div>
+    </div>`).join('');
+}
+function clearUnverifiedRecents(){
+  const keep = DB.get('ww_recent_foods', []).filter(r => r.v === 2);
+  DB.set('ww_recent_foods', keep);
+  renderSettingsExtras();
+  renderDay();
+  showToast('Unverified foods cleared','ok');
 }
 
 // ══ DATA EXPORT ══════════════════════════════════════════════════════════════
@@ -1543,10 +1883,13 @@ function exportData() {
   const payload = {
     exported: new Date().toISOString(),
     app: 'PointScan',
+    program: '2025/2026 WW Points (approximation)',
+    plan: planType,
     dailyBudget,
     weeklyBudget,
     foodLog: weekLog,
     weightLog,
+    meals,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1566,6 +1909,7 @@ function showToast(msg,type=''){const el=document.getElementById('toast');el.inn
 function hideToast(){document.getElementById('toast').className='';}
 
 // ══ INIT ════════════════════════════════════════════════════════════════════
+seedMeals();
 renderDay();
 // Set today's date header
 const now=new Date();

@@ -8,18 +8,28 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'API key not configured' });
   }
 
-  const { mealText } = req.body;
+  const { mealText, plan } = req.body;
   if (!mealText || typeof mealText !== 'string' || mealText.length > 1000) {
     return res.status(400).json({ error: 'Invalid meal text' });
   }
+  const diabetic = plan === 'diabetic';
 
-  const prompt = `You are a nutrition expert. Calculate WW PersonalPoints for this meal.
+  // NOTE: WW's exact Points algorithm is proprietary; the formula below is
+  // the closest published approximation. The client re-verifies every item
+  // (zero-point status + points) through its own engine, so the numbers the
+  // AI returns are advisory — the per-item nutrition estimates are what
+  // actually matter.
+  const zeroList = diabetic
+    ? 'non-starchy vegetables, whole eggs, plain skinless chicken/turkey, lean beef/pork, plain fish/seafood, tofu, tempeh, beans, lentils. On this DIABETIC plan, fruit, corn, potatoes, starchy vegetables, oats, yogurt and cottage cheese are NOT zero.'
+    : 'whole fruits, non-starchy vegetables, whole eggs, plain skinless chicken/turkey (incl. skinless dark meat), lean beef/pork, plain fish/seafood, plain oats, plain nonfat yogurt (no flavor), plain nonfat cottage cheese, tofu, tempeh, beans, lentils, corn, potatoes, air-popped plain popcorn.';
 
-ZERO POINTS (always 0): whole fruits, all vegetables including potatoes, whole eggs, plain skinless chicken/turkey, plain fish/seafood, plain oats, plain nonfat yogurt (no flavor), plain nonfat cottage cheese, tofu, tempeh, beans, lentils.
+  const prompt = `You are a nutrition expert. Estimate nutrition and WW Points (2025/2026 program) for this meal.
 
-NOT ZERO: flavored yogurt, 2% dairy, juice, dried fruit, granola, bread, rice, pasta, cheese, butter, oil, nuts, peanut butter, alcohol.
+ZERO POINTS only in PLAIN, WHOLE, UNPROCESSED form: ${zeroList}
 
-WW formula for non-zero foods: points = round(max(0, calories*0.0305 + saturated_fat*0.275 + sugar*0.12 - protein*0.098 - fiber*0.098))
+NEVER ZERO (processed derivatives): fried/breaded anything, potato chips/fries/hash browns, flavored or low-fat (not nonfat) yogurt, granola/bars, juice, dried fruit, bread, rice, pasta, cheese, butter, oil, nuts, peanut butter, alcohol, cured/deli meats.
+
+Points formula for non-zero foods (published approximation): points = round(max(0, calories*0.0305 + saturated_fat*0.275 + sugar*0.12 - protein*0.098 - fiber*0.098))
 
 Meal: ${mealText.replace(/"/g, "'")}
 
