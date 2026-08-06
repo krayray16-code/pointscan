@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#00857c"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="PointScan"/>
+<meta name="description" content="Track WW Points, scan barcodes, and build meals."/>
 <title>PointScan — WW Tracker</title>
 <!-- ZXing is vendored, not loaded from a CDN: it is the barcode decoder for
      iPhone/Safari (no BarcodeDetector there), so a CDN outage or a blocked
@@ -36,20 +41,32 @@
   --radius: 16px;
   --shadow: 0 2px 16px rgba(0,0,0,0.07);
   --shadow-sm: 0 1px 4px rgba(0,0,0,0.06);
+  /* Height of the fixed bottom bar INCLUDING the iPhone home-indicator inset.
+     JS overwrites this with the measured value on load/resize; this fallback
+     keeps the layout correct before that runs. */
+  --nav-h: calc(62px + env(safe-area-inset-bottom));
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-html,body{height:100%;}
-body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padding-bottom:80px;-webkit-font-smoothing:antialiased;}
+/* body must be min-height, not height: with border-box, a fixed height:100%
+   pins the body box to the viewport, so its padding-bottom lands at the fold
+   and taller content just overflows past it — the reserved space is ignored
+   and the last controls end up under the fixed bar. */
+html{height:100%;-webkit-text-size-adjust:100%;}
+body{min-height:100%;}
+/* Reserve the real bar height (not a fixed 80px) so the last element on a
+   page — e.g. "Add to Today's Log" after a scan — is never hidden behind it. */
+body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padding-bottom:calc(var(--nav-h) + 18px);-webkit-font-smoothing:antialiased;}
 
 /* ── NAV BAR ── */
 .nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0 8px;cursor:pointer;color:var(--ink3);transition:color .2s;gap:3px;-webkit-tap-highlight-color:transparent;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;padding:9px 0 7px;cursor:pointer;color:var(--ink3);transition:color .2s;gap:3px;-webkit-tap-highlight-color:transparent;}
 .nav-item.active{color:var(--teal);}
 .nav-icon{font-size:1.35rem;line-height:1;}
 .nav-label{font-size:.62rem;font-weight:700;letter-spacing:.03em;}
 
 /* ── SCREENS ── */
-.screen{display:none;min-height:100vh;}
+/* dvh tracks Safari's collapsing toolbars; vh is the fallback. */
+.screen{display:none;min-height:100vh;min-height:100dvh;}
 .screen.active{display:block;}
 
 /* ── PAGE HEADER ── */
@@ -91,15 +108,6 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 .wday-dot.today{border-color:var(--teal);color:var(--teal);}
 .wday-dot.over{background:var(--red-light);border-color:var(--red);color:var(--red);}
 .wday-dot.good{background:var(--teal-light);border-color:var(--teal);color:var(--teal);}
-.wday-dot.perfect{background:var(--teal);border-color:var(--teal);color:#fff;}
-
-/* Weeklies row */
-.weeklies-row{background:var(--purple-light);border:1px solid #d4b8f0;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px;}
-.weeklies-icon{font-size:1.3rem;}
-.weeklies-info{flex:1;}
-.weeklies-title{font-size:.8rem;font-weight:700;color:var(--purple);}
-.weeklies-sub{font-size:.7rem;color:var(--ink2);margin-top:1px;}
-.weeklies-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.6rem;color:var(--purple);}
 
 /* Quick add bar */
 .quick-add-bar{display:flex;gap:8px;margin-bottom:14px;}
@@ -110,7 +118,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 
 /* Food log */
 .log-section-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;color:var(--ink);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
-.log-section-title span{font-size:.7rem;font-weight:600;color:var(--teal);cursor:pointer;}
+.log-section-title span{font-size:.7rem;font-weight:600;color:var(--ink3);cursor:pointer;padding:4px 8px;margin:-4px -8px;-webkit-tap-highlight-color:transparent;}
 .log-empty{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;text-align:center;color:var(--ink3);font-size:.82rem;}
 .log-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-sm);animation:fadeUp .2s ease;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -120,7 +128,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 .li-meta{font-size:.68rem;color:var(--ink2);margin-top:2px;}
 .li-pts{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.1rem;color:var(--teal);min-width:36px;text-align:right;}
 .li-pts.zero-pts{color:var(--green);}
-.li-del{background:none;border:none;color:var(--border);cursor:pointer;font-size:.85rem;padding:4px;transition:color .2s;flex-shrink:0;}
+.li-del{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:1rem;padding:8px;margin:-8px -4px -8px 0;line-height:1;transition:color .2s;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 .li-del:hover{color:var(--red);}
 .zero-badge{display:inline-block;background:var(--green);color:#fff;border-radius:20px;font-size:.55rem;font-weight:800;padding:1px 5px;margin-left:4px;vertical-align:middle;letter-spacing:.04em;}
 
@@ -161,7 +169,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 
 /* Manual entry */
 .input-row{display:flex;gap:8px;margin-bottom:14px;}
-.txt-input{flex:1;background:var(--surface);border:1.5px solid var(--border);border-radius:99px;padding:11px 16px;font-family:'DM Sans',sans-serif;font-size:.9rem;color:var(--ink);outline:none;transition:border-color .2s;}
+.txt-input{flex:1;min-width:0;background:var(--surface);border:1.5px solid var(--border);border-radius:99px;padding:11px 16px;font-family:'DM Sans',sans-serif;font-size:16px;color:var(--ink);outline:none;transition:border-color .2s;}
 .txt-input:focus{border-color:var(--teal);}
 .txt-input::placeholder{color:var(--ink3);}
 .teal-btn{background:var(--teal);color:#fff;border:none;border-radius:99px;padding:11px 18px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;cursor:pointer;white-space:nowrap;}
@@ -192,7 +200,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 .nutr-key{font-size:.6rem;color:var(--ink2);margin-top:1px;text-transform:uppercase;letter-spacing:.04em;}
 .add-food-row{display:flex;align-items:center;gap:10px;padding:12px 14px;}
 .qty-ctrl{display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--border);border-radius:99px;overflow:hidden;}
-.qty-btn{background:none;border:none;color:var(--ink);font-size:1.2rem;padding:7px 14px;cursor:pointer;}
+.qty-btn{background:none;border:none;color:var(--ink);font-size:1.2rem;padding:10px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 .qty-num{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;min-width:26px;text-align:center;}
 .add-log-btn{flex:1;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:12px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.88rem;cursor:pointer;}
 
@@ -296,7 +304,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 .settings-row-sub{font-size:.7rem;color:var(--ink2);margin-top:2px;}
 .settings-row-val{font-family:'Nunito',sans-serif;font-weight:800;font-size:1.1rem;color:var(--teal);}
 .form-label{display:block;font-size:.75rem;font-weight:700;color:var(--ink2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
-.form-input,.form-select{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:.9rem;color:var(--ink);outline:none;transition:border-color .2s;-webkit-appearance:none;}
+.form-input,.form-select{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:11px 12px;font-family:'DM Sans',sans-serif;font-size:16px;color:var(--ink);outline:none;transition:border-color .2s;-webkit-appearance:none;}
 .form-input:focus,.form-select:focus{border-color:var(--teal);}
 .select-wrap{position:relative;}
 .select-wrap::after{content:'▾';position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--ink2);pointer-events:none;}
@@ -318,7 +326,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 .ai-meal-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
 .ai-chip{background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:99px;padding:5px 12px;font-size:.72rem;font-weight:600;color:var(--teal-dark);cursor:pointer;transition:background .15s;}
 .ai-chip:active{background:var(--teal-mid);}
-.ai-textarea{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:11px 13px;font-family:'DM Sans',sans-serif;font-size:.88rem;color:var(--ink);resize:none;outline:none;min-height:80px;background:var(--bg);transition:border-color .2s;}
+.ai-textarea{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:11px 13px;font-family:'DM Sans',sans-serif;font-size:16px;color:var(--ink);resize:none;outline:none;min-height:84px;background:var(--bg);transition:border-color .2s;}
 .ai-textarea:focus{border-color:var(--teal);}
 .ai-textarea::placeholder{color:var(--ink3);}
 .ai-result-wrap{display:none;}
@@ -381,7 +389,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 .log-item{cursor:pointer;}
 
 /* ── TOAST ── */
-#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--ink);color:#fff;border-radius:99px;padding:10px 22px;font-size:.8rem;font-weight:600;z-index:999;transition:all .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;}
+#toast{position:fixed;bottom:calc(var(--nav-h) + 14px);left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--ink);color:#fff;border-radius:99px;padding:10px 22px;font-size:.8rem;font-weight:600;z-index:999;transition:all .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 #toast.ok{background:var(--teal);}
 #toast.err{background:var(--red);}
@@ -543,6 +551,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
           <div class="nutr-cell"><div class="nutr-val" id="n-sat">—</div><div class="nutr-key">Sat Fat</div></div>
           <div class="nutr-cell"><div class="nutr-val" id="n-sug">—</div><div class="nutr-key">Sugar</div></div>
           <div class="nutr-cell"><div class="nutr-val" style="color:var(--teal)" id="n-pro">—</div><div class="nutr-key">Protein</div></div>
+          <div class="nutr-cell"><div class="nutr-val" style="color:var(--teal)" id="n-fib">—</div><div class="nutr-key">Fiber</div></div>
         </div>
         <div class="add-food-row">
           <div class="qty-ctrl">
@@ -599,6 +608,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
     </div>
 
     <div class="ai-result-wrap" id="ai-result">
+      <div id="ai-fallback-note" style="display:none;background:var(--amber-light);border:1px solid #f5c060;border-radius:10px;padding:10px 12px;font-size:.74rem;color:#8a5200;line-height:1.5;margin-bottom:10px;"></div>
       <div class="ai-result-header">
         <div class="ai-result-pts" id="ai-total-pts">—</div>
         <div><div class="air-lbl">WW Points (AI Estimate)</div><div class="air-name" id="ai-meal-label">Meal</div></div>
@@ -934,19 +944,6 @@ function autoStartScanner() {
 // proprietary — the engine uses the closest published nutrition-based
 // approximation (calories, saturated fat, added sugar, protein, fiber).
 // Every calculation respects the active plan (standard vs diabetic).
-
-function isZeroPoint(name, cats) {
-  return PointsEngine.zeroCheck(name, cats || '', planType).zero;
-}
-
-// Back-compat signature used across the app. addedSug is optional; when
-// absent the engine falls back to total sugars (flagged approximation).
-function calcWW(cal, sat, sug, pro, fib, name, cats, addedSug) {
-  return PointsEngine.calcPoints(
-    { cal, sat, sug, addedSug: addedSug ?? null, pro, fib },
-    name, cats || '', planType
-  ).points;
-}
 
 // Points for a local FOOD_DB entry on the current plan.
 function dbFoodPoints(f) {
@@ -1697,6 +1694,7 @@ async function lookupBarcode(code){
     const pr=PointsEngine.calcPoints({cal:currentProduct.cal,sat:currentProduct.sat,sug:currentProduct.sug,addedSug:currentProduct.asug??null,pro:currentProduct.pro,fib:currentProduct.fib},currentProduct.name,currentProduct.cats,planType);
     currentProduct.pts=pr.points;
     currentProduct.zero=pr.zero;
+    currentProduct.category=pr.category;
     currentProduct.conditional=pr.conditional;
     currentProduct.prompt=pr.prompt;
     currentQty=1; renderProductResult(); hideToast();
@@ -1722,11 +1720,25 @@ function renderProductResult(){
   pEl.textContent=pts; pEl.className='prod-pts-num'+(zero?' zero-pts':pts>12?' high':pts>7?' med':'');
   document.getElementById('pts-lbl').textContent='WW Points';
   document.getElementById('serv-size').textContent=p.servLabel;
-  document.getElementById('zero-msg').style.display=zero?'block':'none';
+  // Say WHY, so a 0 is never ambiguous: a zero-point food names its category,
+  // and a pointed food that merely computes to 0 says so explicitly.
+  const zmsg=document.getElementById('zero-msg');
+  if (zero) {
+    zmsg.style.display='block';
+    zmsg.innerHTML='✅ Zero-point food' + (p.category ? ' · ' + esc(p.category) : '');
+  } else if (pts===0) {
+    zmsg.style.display='block';
+    zmsg.style.background='var(--bg)';
+    zmsg.style.color='var(--ink2)';
+    zmsg.innerHTML='Rounds to 0 for this serving — not a zero-point food, so larger servings will add up';
+  } else {
+    zmsg.style.display='none';
+  }
   document.getElementById('n-cal').textContent=p.cal!=null?Math.round(p.cal):'—';
   document.getElementById('n-sat').textContent=p.sat!=null?(+p.sat).toFixed(1):'—';
   document.getElementById('n-sug').textContent=p.sug!=null?Math.round(p.sug):'—';
   document.getElementById('n-pro').textContent=p.pro!=null?Math.round(p.pro):'—';
+  document.getElementById('n-fib').textContent=p.fib!=null?Math.round(p.fib):'—';
   document.getElementById('qty-display').textContent=1;
   document.getElementById('prod-result').classList.add('show');
 }
@@ -1873,6 +1885,65 @@ function quickAddFromSearch(idx){
 }
 
 // ══ AI MEAL ══════════════════════════════════════════════════════════════════
+// Local fallback parser. The AI endpoint depends on a third-party quota that
+// can run out, so the feature also works offline: we parse the description
+// against the built-in food database and price it with the same engine. It
+// only knows foods in that database, so anything it can't identify is listed
+// explicitly rather than silently counted as zero.
+const QTY_WORDS = { a:1, an:1, one:1, two:2, three:3, four:4, five:5, six:6,
+  seven:7, eight:8, nine:9, ten:10, half:0.5, quarter:0.25, couple:2, dozen:12 };
+
+function parseQuantity(text) {
+  const frac = text.match(/(\d+)\s*\/\s*(\d+)/);
+  if (frac) return parseInt(frac[1],10) / parseInt(frac[2],10);
+  const dec = text.match(/(\d+(?:\.\d+)?)/);
+  if (dec) return parseFloat(dec[1]);
+  for (const w in QTY_WORDS) if (new RegExp('\\b'+w+'\\b','i').test(text)) return QTY_WORDS[w];
+  return 1;
+}
+
+// Score a food against a phrase: prefer the most specific name that matches.
+function matchFood(phrase) {
+  const p = ' ' + phrase.toLowerCase().replace(/[^a-z0-9%\s]/g,' ').replace(/\s+/g,' ') + ' ';
+  let best = null, bestScore = 0;
+  for (const f of FoodDB.FOODS.concat(FoodDB.ADD_INS)) {
+    const words = f.name.toLowerCase().replace(/\(.*?\)/g,'').replace(/[^a-z0-9%\s]/g,' ')
+      .split(/\s+/).filter(w => w.length > 2);
+    if (!words.length) continue;
+    let hits = 0;
+    for (const w of words) if (p.includes(' ' + w) || p.includes(w + ' ')) hits++;
+    if (!hits) continue;
+    const score = hits / words.length + hits * 0.01; // completeness, then specificity
+    if (score > bestScore) { bestScore = score; best = f; }
+  }
+  return bestScore >= 0.5 ? best : null;
+}
+
+function parseMealLocally(text) {
+  const parts = String(text||'').split(/,|\band\b|\bwith\b|\bplus\b|\n|\+|;/i)
+    .map(s => s.trim()).filter(s => s.length > 1);
+  const items = [], unmatched = [];
+  for (const part of parts) {
+    const f = matchFood(part);
+    if (!f) { unmatched.push(part); continue; }
+    const qty = parseQuantity(part);
+    const r = PointsEngine.calcPoints(
+      { cal:f.cal, sat:f.sat, sug:f.sug, addedSug:f.asug, pro:f.pro, fib:f.fib },
+      f.name, '', planType);
+    const pts = r.zero ? 0 : Math.round((r.points || 0) * qty);
+    items.push({ name: f.name + (qty !== 1 ? ` ×${qty}` : ''), isZero: r.zero,
+      calories: Math.round(f.cal * qty), protein: Math.round(f.pro * qty),
+      points: pts, note: f.serving });
+  }
+  return {
+    mealLabel: parts.length ? (parts[0].slice(0,28) + (parts.length>1?' + more':'')) : 'Meal',
+    items, unmatched,
+    totalPoints: items.reduce((s,i)=>s+i.points,0),
+    local: true
+  };
+}
+
+let aiFallbackReason = null;
 function setMeal(t){document.getElementById('meal-input').value=t;}
 async function analyzeMeal(){
   const text=document.getElementById('meal-input').value.trim();
@@ -1880,26 +1951,47 @@ async function analyzeMeal(){
   document.getElementById('analyze-btn').disabled=true;
   document.getElementById('ai-result').classList.remove('show');
   document.getElementById('ai-loading').classList.add('show');
+  aiFallbackReason = null;
   try{
-    const res = await fetch('/api/ai-meal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mealText: text, plan: planType }),
-      signal: timeoutSignal(25000)
-    });
-    if (!res.ok) throw new Error(await res.text());
-    currentAiMeal = await res.json();
-    if (currentAiMeal.error) throw new Error(currentAiMeal.error);
+    let payload = null;
+    if (navigator.onLine) {
+      try {
+        const res = await fetch('/api/ai-meal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mealText: text, plan: planType }),
+          signal: timeoutSignal(25000)
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && !body.error) payload = body;
+        else aiFallbackReason = res.status === 429 || body.error === 'quota'
+          ? 'AI quota used up for now'
+          : 'AI service unavailable';
+      } catch (e) {
+        aiFallbackReason = e && e.name === 'TimeoutError' ? 'AI timed out' : 'Could not reach the AI service';
+      }
+    } else {
+      aiFallbackReason = 'You\'re offline';
+    }
+
+    // Fall back to the built-in parser rather than failing outright.
+    if (!payload) payload = parseMealLocally(text);
+    currentAiMeal = payload;
     // Re-verify every AI item locally: the AI supplies nutrition estimates,
     // but zero-point status and points come from OUR engine (same rules as
     // scan/search — the AI cannot bypass the processing check).
-    currentAiMeal.items = (currentAiMeal.items||[]).map(item => {
-      const r = PointsEngine.calcPoints(
-        { cal:item.calories, sat:item.saturatedFat, sug:item.sugar, addedSug:null, pro:item.protein, fib:item.fiber },
-        item.name, '', planType);
-      return { ...item, isZero: r.zero, points: r.points ?? item.points ?? 0 };
-    });
-    currentAiMeal.totalPoints = currentAiMeal.items.reduce((s,i)=>s+(i.points||0),0);
+    // Locally-parsed results are skipped: they already came from the engine
+    // with full nutrition, and recomputing from the partial fields carried on
+    // those items would lose saturated fat, sugar and fiber.
+    if (!currentAiMeal.local) {
+      currentAiMeal.items = (currentAiMeal.items||[]).map(item => {
+        const r = PointsEngine.calcPoints(
+          { cal:item.calories, sat:item.saturatedFat, sug:item.sugar, addedSug:null, pro:item.protein, fib:item.fiber },
+          item.name, '', planType);
+        return { ...item, isZero: r.zero, points: r.points ?? item.points ?? 0 };
+      });
+      currentAiMeal.totalPoints = currentAiMeal.items.reduce((s,i)=>s+(i.points||0),0);
+    }
     renderAiResult(currentAiMeal);
   }catch(e){
     showToast('AI estimation failed — ' + (e?.message || 'check connection'), 'err');
@@ -1912,12 +2004,43 @@ function renderAiResult(meal){
   document.getElementById('ai-loading').classList.remove('show');
   document.getElementById('ai-total-pts').textContent=meal.totalPoints;
   document.getElementById('ai-meal-label').textContent=meal.mealLabel||'Meal';
-  document.getElementById('ai-items').innerHTML=(meal.items||[]).map(item=>`
+  const lbl = document.querySelector('.air-lbl'); // class, not an id
+  if (lbl) lbl.textContent = meal.local
+    ? 'WW Points (from your food database)' : 'WW Points (AI estimate)';
+
+  let rows = (meal.items||[]).map(item=>`
     <div class="ai-item-row">
       <div style="font-size:1rem">${item.isZero?'✅':'🍽️'}</div>
       <div style="flex:1"><div class="ai-item-name">${esc(item.name)}${item.isZero?'<span class="zero-badge">ZERO</span>':''}</div><div class="ai-item-cal">${esc(item.calories)} cal · ${esc(item.protein)}g protein · ${esc(item.note||'')}</div></div>
       <div class="ai-item-pts-col">${esc(item.points)} pts</div>
     </div>`).join('');
+
+  // Anything the local parser couldn't identify is shown, never silently
+  // dropped — otherwise the total would look complete when it isn't.
+  if (meal.unmatched && meal.unmatched.length) {
+    rows += meal.unmatched.map(u=>`
+      <div class="ai-item-row" style="background:var(--amber-light)">
+        <div style="font-size:1rem">❓</div>
+        <div style="flex:1"><div class="ai-item-name">${esc(u)}</div>
+        <div class="ai-item-cal">Not in the food database — search or scan it to add its points</div></div>
+        <div class="ai-item-pts-col" style="color:var(--ink3)">?</div>
+      </div>`).join('');
+  }
+  if (!rows) rows = '<div class="ai-item-row"><div style="flex:1;font-size:.8rem;color:var(--ink2)">Nothing recognised in that description. Try naming foods plainly, e.g. “2 eggs, 1 banana, 1 slice whole wheat bread”.</div></div>';
+  document.getElementById('ai-items').innerHTML = rows;
+
+  const note = document.getElementById('ai-fallback-note');
+  if (aiFallbackReason) {
+    note.style.display = 'block';
+    note.innerHTML = `⚠️ ${esc(aiFallbackReason)} — estimated from your built-in food database instead.`;
+  } else {
+    note.style.display = 'none';
+  }
+
+  const disc = document.querySelector('.ai-disclaimer');
+  if (disc) disc.textContent = meal.local
+    ? 'Estimates from the built-in database — scan a barcode for exact points'
+    : '⚠️ AI estimates — use barcode scan for exact points';
   document.getElementById('ai-result').classList.add('show');
 }
 
@@ -2467,6 +2590,23 @@ function showToast(msg,type=''){
   tTimer=setTimeout(hideToast,type?3000:15000);
 }
 function hideToast(){document.getElementById('toast').className='';}
+
+// ══ LAYOUT ══════════════════════════════════════════════════════════════════
+// Measure the real bottom-bar height (it varies with the iPhone home-indicator
+// inset and the user's text-size setting) and reserve exactly that much space,
+// so the last control on a page is never hidden behind the bar.
+function syncNavHeight() {
+  const nav = document.querySelector('.nav');
+  if (!nav) return;
+  const h = nav.offsetHeight; // already includes the safe-area padding
+  if (h > 0) document.documentElement.style.setProperty('--nav-h', h + 'px');
+}
+window.addEventListener('resize', syncNavHeight);
+window.addEventListener('orientationchange', () => setTimeout(syncNavHeight, 250));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', syncNavHeight);
+syncNavHeight();
+// Fonts load asynchronously and can change the bar's height.
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncNavHeight);
 
 // ══ INIT ════════════════════════════════════════════════════════════════════
 seedMeals();

@@ -36,7 +36,14 @@ Meal: ${mealText.replace(/"/g, "'")}
 Respond with ONLY this JSON structure, no other text:
 {"mealLabel":"short meal name","totalPoints":5,"items":[{"name":"food item","isZero":false,"calories":100,"protein":10,"saturatedFat":1,"sugar":2,"fiber":0,"points":3,"note":"brief note"}]}`;
 
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+  // gemini-1.5-flash was retired and now 404s, so the old chain had no working
+  // fallback once the primary model hit its quota. Ordered cheapest-quota
+  // first: the -lite models have far more generous free-tier limits, so a
+  // 429 on one model no longer takes the whole feature down.
+  const models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-flash'];
+
+  let sawQuotaError = false;
+  let lastDetail = '';
 
   for (const model of models) {
     try {
@@ -56,22 +63,30 @@ Respond with ONLY this JSON structure, no other text:
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 429) sawQuotaError = true;
+        lastDetail = `${model}: ${response.status} ${data?.error?.message || ''}`.slice(0, 180);
         console.log(`${model} failed:`, JSON.stringify(data).substring(0, 200));
         continue;
       }
 
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) continue;
+      if (!jsonMatch) { lastDetail = `${model}: no JSON in response`; continue; }
 
       const parsed = JSON.parse(jsonMatch[0]);
       return res.status(200).json(parsed);
 
     } catch (e) {
+      lastDetail = `${model}: ${e.message}`.slice(0, 180);
       console.log(`${model} error:`, e.message);
       continue;
     }
   }
 
-  return res.status(500).json({ error: 'AI estimation failed' });
+  // Tell the client WHY, so it can explain it and fall back locally instead of
+  // showing a generic failure.
+  return res.status(sawQuotaError ? 429 : 502).json({
+    error: sawQuotaError ? 'quota' : 'unavailable',
+    detail: lastDetail
+  });
 }
