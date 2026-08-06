@@ -5,7 +5,6 @@
   },
   "headers": [
     {
-      "comment": "The app is a single HTML file. iOS caches it aggressively (especially when added to the home screen), which left users running an old build after a deploy. Always revalidate the shell.",
       "source": "/",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
@@ -18,7 +17,6 @@
       ]
     },
     {
-      "comment": "App scripts are loaded with a ?v= build stamp, so a new build always requests a new URL and these can be cached hard.",
       "source": "/(points-engine|food-db|week-engine).js",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
