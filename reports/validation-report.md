@@ -1,6 +1,6 @@
 # Food Database Validation Report
 
-Generated: 2026-08-05 · Engine: 2025/2026 WW Points program (nutrition-based approximation; official algorithm is proprietary)
+Generated: 2026-08-06 · Engine: 2025/2026 WW Points program (nutrition-based approximation; official algorithm is proprietary)
 
 Invariant checked for every item: **zero points ⇒ matches a zero-point category AND passes the processing/preparation check.** Violations found: **0**
 
@@ -34,7 +34,7 @@ Invariant checked for every item: **zero points ⇒ matches a zero-point categor
 | Egg whites | 2 large (66g) | 0 (zero) | 0 (zero: Eggs) | 0 (zero) | unchanged | — |
 | Scrambled eggs | 2 large (100g) | 0 (zero) | 0 (zero: Eggs, asks about add-ins) | 0 (zero) | unchanged | asks about add-ins before logging |
 | Roasted vegetables | 1 cup (150g) | 2 | 0 (zero: Non-starchy vegetables, asks about add-ins) | 0 (zero) | CHANGED | asks about add-ins before logging |
-| Plain nonfat Greek yogurt | 3/4 cup (170g) | 0 (zero) | 0 (zero: Plain nonfat yogurt & cottage cheese) | 1 | unchanged | — |
+| Plain nonfat Greek yogurt | 3/4 cup (170g) | 0 (zero) | 0 (zero: Plain nonfat yogurt & cottage cheese) | 2 | unchanged | — |
 | Plain nonfat cottage cheese | 1/2 cup (113g) | 0 (zero) | 0 (zero: Plain nonfat yogurt & cottage cheese) | 1 | unchanged | — |
 | Chicken breast (grilled, skinless) | 4 oz (113g) | 0 (zero) | 0 (zero: Skinless chicken & turkey) | 0 (zero) | unchanged | — |
 | Turkey breast (roasted, skinless) | 4 oz (113g) | 0 (zero) | 0 (zero: Skinless chicken & turkey) | 0 (zero) | unchanged | — |

@@ -14,7 +14,18 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript' };
 const server = createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (url.startsWith('/off/')) {
+    const code = url.split('/').pop().replace('.json', '');
     res.setHeader('Content-Type', 'application/json');
+    // 049000028911 => the real-world regression case: a 647-style light bread
+    // whose high fiber made the uncapped formula round to 0, which the UI then
+    // badged "Zero-point food!".
+    if (code === '049000028911') {
+      res.end(JSON.stringify({ status: 1, product: { product_name: 'Italian Bread', brands: 'Old Tyme',
+        nutriments: { 'energy-kcal_serving': 40, 'sugars_serving': 1, 'proteins_serving': 2, 'saturated-fat_serving': 0, 'fiber_serving': 7 },
+        serving_size: '1 slice (27 g)',
+        categories_tags: ['en:plant-based-foods-and-beverages','en:cereals-and-potatoes','en:breads'] }}));
+      return;
+    }
     res.end(JSON.stringify({ status: 1, product: { product_name: 'Test Cola', brands: 'T',
       nutriments: { 'energy-kcal_serving': 140, 'sugars_serving': 39, 'proteins_serving': 0, 'saturated-fat_serving': 0, 'fiber_serving': 0 },
       serving_size: '12 fl oz', categories_tags: ['en:sodas'] }}));
@@ -73,6 +84,27 @@ check(await page.evaluate(() => window.__usedNative === true), 'Android uses the
 check(await page.evaluate(() => window.__scannedCode) === EXPECTED, 'native path decoded and looked up the barcode');
 await page.waitForTimeout(600);
 check((await page.locator('#pts-display').textContent()).trim() === '9', 'same engine prices the scan identically to iOS (9 pts)');
+
+console.log('Regression — light bread must not be a "zero-point food":');
+await page.click('#nav-scan');
+await page.fill('#manual-barcode', '049000028911');
+await page.click('text=Look Up');
+await page.waitForTimeout(900);
+check((await page.locator('#prod-name').textContent()).includes('Italian Bread'), 'bread product looked up');
+const breadPts = (await page.locator('#pts-display').textContent()).trim();
+check(breadPts === '1', 'light bread = 1 pt, not 0 (got ' + breadPts + ')');
+check(await page.locator('#zero-msg').isHidden(), 'NO "Zero-point food!" badge on bread');
+check((await page.locator('#pts-lbl').textContent()).trim() === 'WW Points', 'label reads "WW Points", not the retired PersonalPoints branding');
+// And it must not carry a zero badge into the day log either
+await page.click('.add-log-btn');
+await page.waitForTimeout(400);
+await page.click('#nav-day');
+await page.waitForTimeout(300);
+check(await page.locator('.log-item', { hasText: 'Italian Bread' }).locator('.zero-badge').count() === 0, 'no ZERO badge on the logged bread entry');
+// A genuine zero-point food still gets its badge
+await page.evaluate(() => pushToLog({ name: 'Banana', pts: 0, qty: 1, totalPts: 0, icon: '🍌', source: 'search', zero: true }));
+await page.waitForTimeout(300);
+check(await page.locator('.log-item', { hasText: 'Banana' }).locator('.zero-badge').count() === 1, 'real zero-point food still shows the ZERO badge');
 
 console.log('Mashed potato / add-ins flow:');
 await page.click('#nav-search');

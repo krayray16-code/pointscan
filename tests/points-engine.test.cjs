@@ -250,8 +250,39 @@ ok(isZero('Lean ground beef 93%', D), 'diabetic: lean beef still zero');
 function pts(n, name) { return E.calcPoints(n, name || 'test food item xq', '', 'standard').points; }
 ok(pts({ cal: 100, sat: 0, sug: 0, addedSug: 0, pro: 0, fib: 0 }) === 3, 'formula: 100 cal plain = 3 pts');
 ok(pts({ cal: 120, sat: 1, sug: 0, addedSug: 0, pro: 24, fib: 0 }) === 2, 'formula: protein credit works');
-ok(pts({ cal: 50, sat: 0, sug: 0, addedSug: 0, pro: 20, fib: 5 }) === 0, 'formula: floors at 0');
+ok(pts({ cal: 0, sat: 0, sug: 0, addedSug: 0, pro: 0, fib: 0 }) === 0, 'formula: 0-calorie food = 0 pts');
 ok(pts({ cal: 152, sat: 1.4, sug: 0.2, addedSug: 0, pro: 1.8, fib: 1.4 }, 'Potato chips') === 5, 'potato chips ≈ 5 pts');
+
+// ── protein/fiber credit cap ──
+// Regression: "Old Tyme Italian Bread" (a 647-style light bread — 40 cal,
+// ~7g fiber) scored 0.46 and displayed as 0, which the UI then badged as a
+// zero-point food. Bread is never zero-point; WW prices this at 1.
+{
+  const bread = { cal: 40, sat: 0, sug: 1, addedSug: null, pro: 2, fib: 7 };
+  const r = E.calcPoints(bread, 'Italian Bread', 'en:cereals-and-potatoes en:breads', 'standard');
+  ok(r.zero === false, 'light bread is NOT a zero-point food');
+  ok(r.points === 1, 'high-fiber light bread = 1 pt, not 0 (got ' + r.points + ')');
+  ok(r.flags.includes('credit-capped'), 'capped credit is flagged');
+  // Same bread on the old uncapped math would have been 0:
+  const raw = 40 * 0.0305 + 1 * 0.12 - 2 * 0.098 - 7 * 0.098;
+  ok(Math.round(raw) === 0, 'sanity: uncapped formula really did round to 0');
+
+  // The cap must not disturb ordinary foods.
+  ok(pts({ cal: 216, sat: 0.4, sug: 0.7, addedSug: 0, pro: 5, fib: 3.5 }, 'Brown rice') === 6, 'cap does not change brown rice (6)');
+  ok(pts({ cal: 80, sat: 0.2, sug: 4, addedSug: 3, pro: 5, fib: 3 }, 'Whole wheat bread') === 2, 'cap does not change wheat bread (2)');
+  ok(pts({ cal: 190, sat: 1.5, sug: 12, addedSug: 11, pro: 3, fib: 2 }, 'Granola bar') === 7, 'cap does not change granola bar (7)');
+  // A pointed food can still legitimately reach 0 when it is nearly calorie-free.
+  ok(pts({ cal: 5, sat: 0, sug: 0, addedSug: 0, pro: 0, fib: 0 }, 'Mustard') === 0, 'near-zero-calorie condiment still 0 pts');
+}
+
+// ── "0 points" must never be confused with "zero-point food" ──
+{
+  const bread = E.calcPoints({ cal: 20, sat: 0, sug: 0, addedSug: 0, pro: 1, fib: 1 }, 'Italian Bread', '', 'standard');
+  ok(bread.points === 1 || bread.points === 0, 'sanity: tiny bread serving computes low');
+  ok(bread.zero === false, 'a pointed food that computes to a low/0 score still reports zero:false');
+  const banana = E.calcPoints({ cal: 105, sat: 0.1, sug: 14, addedSug: null, pro: 1.3, fib: 3.1 }, 'Banana', '', 'standard');
+  ok(banana.zero === true, 'a real zero-point food reports zero:true');
+}
 {
   const r = E.calcPoints(null, 'Mystery casserole', '', 'standard');
   ok(r.points === null && r.flags.includes('missing-nutrition'),

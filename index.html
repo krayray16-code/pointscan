@@ -1013,7 +1013,10 @@ function renderLogList() {
     return;
   }
   el.innerHTML = log.map(item => {
-    const zero = item.pts === 0;
+    // Only badge true zero-point-category foods. Entries logged before this
+    // fix have no `zero` field — they simply don't get the badge rather than
+    // us guessing from a 0 that may have been a rounding artifact.
+    const zero = item.zero === true;
     const srcLabel = item.source === 'ai' ? 'AI estimate'
       : item.source === 'search' ? 'food search'
       : item.source === 'recent' ? 'recently logged'
@@ -1553,6 +1556,7 @@ async function lookupBarcode(code){
     // zero-point rules and the processing check cannot be bypassed by scanning.
     const pr=PointsEngine.calcPoints({cal:currentProduct.cal,sat:currentProduct.sat,sug:currentProduct.sug,addedSug:currentProduct.asug??null,pro:currentProduct.pro,fib:currentProduct.fib},currentProduct.name,currentProduct.cats,planType);
     currentProduct.pts=pr.points;
+    currentProduct.zero=pr.zero;
     currentProduct.conditional=pr.conditional;
     currentProduct.prompt=pr.prompt;
     currentQty=1; renderProductResult(); hideToast();
@@ -1570,10 +1574,13 @@ function renderProductResult(){
   document.getElementById('prod-name').textContent=p.name;
   document.getElementById('prod-brand').textContent=p.brand;
   const pts=p.pts??'?';
-  const zero=pts===0;
+  // A food is only a ZERO-POINT food if the engine matched a zero-point
+  // category. A pointed food whose nutrition happens to round down to 0 is
+  // NOT one, and must not be badged as such.
+  const zero=p.zero===true;
   const pEl=document.getElementById('pts-display');
   pEl.textContent=pts; pEl.className='prod-pts-num'+(zero?' zero-pts':pts>12?' high':pts>7?' med':'');
-  document.getElementById('pts-lbl').textContent='WW PersonalPoints™';
+  document.getElementById('pts-lbl').textContent='WW Points';
   document.getElementById('serv-size').textContent=p.servLabel;
   document.getElementById('zero-msg').style.display=zero?'block':'none';
   document.getElementById('n-cal').textContent=p.cal!=null?Math.round(p.cal):'—';
@@ -1608,14 +1615,14 @@ function addScanToLog(){
   if (currentProduct.conditional) {
     openPrepSheet(currentProduct, currentProduct.prompt, res => {
       const t=res.pts*currentQty;
-      pushToLog({name:res.name,pts:res.pts,qty:currentQty,totalPts:t,icon:'🛒',source:'scan',nutrition});
+      pushToLog({name:res.name,pts:res.pts,qty:currentQty,totalPts:t,icon:'🛒',source:'scan',zero:currentProduct.zero===true&&res.pts===0,nutrition});
       showToast(t===0?`${res.name} logged — 0 pts ✓`:`+${t} pts added ✓`,'ok');
       clearScanResult();
     });
     return;
   }
   const pts=currentProduct.pts*currentQty;
-  pushToLog({name:currentProduct.name,pts:currentProduct.pts,qty:currentQty,totalPts:pts,icon:'🛒',source:'scan',nutrition});
+  pushToLog({name:currentProduct.name,pts:currentProduct.pts,qty:currentQty,totalPts:pts,icon:'🛒',source:'scan',zero:currentProduct.zero===true,nutrition});
   showToast(`+${pts} pts added ✓`,'ok');
   clearScanResult();
 }
@@ -1714,13 +1721,13 @@ function quickAddFromSearch(idx){
   // than assuming, then log the base plus exactly the add-ins chosen.
   if (item.conditional) {
     openPrepSheet(item, item.prompt, res => {
-      pushToLog({name:res.name,pts:res.pts,qty:1,totalPts:res.pts,icon:item.icon||'🔎',source:'search',nutrition:item.nutrition});
+      pushToLog({name:res.name,pts:res.pts,qty:1,totalPts:res.pts,icon:item.icon||'🔎',source:'search',zero:item.zero===true&&res.pts===0,nutrition:item.nutrition});
       showToast(res.pts===0?`${res.name} logged — 0 pts ✓`:`+${res.pts} pts logged ✓`,'ok');
       setTimeout(()=>switchScreen('day'),500);
     });
     return;
   }
-  pushToLog({name:item.name,pts:item.pts,qty:1,totalPts:item.pts,icon:item.icon||'🔎',source:'search',nutrition:item.nutrition});
+  pushToLog({name:item.name,pts:item.pts,qty:1,totalPts:item.pts,icon:item.icon||'🔎',source:'search',zero:item.zero===true,nutrition:item.nutrition});
   showToast(`+${item.pts} pts logged ✓`,'ok');
   setTimeout(()=>switchScreen('day'),500);
 }
@@ -1776,13 +1783,14 @@ function renderAiResult(meal){
 
 function addAiMealToLog(){
   if(!currentAiMeal)return;
-  pushToLog({name:currentAiMeal.mealLabel||'AI Meal',pts:currentAiMeal.totalPoints,qty:1,totalPts:currentAiMeal.totalPoints,icon:'✨',source:'ai'});
+  const allZero=(currentAiMeal.items||[]).length>0&&currentAiMeal.items.every(i=>i.isZero===true);
+  pushToLog({name:currentAiMeal.mealLabel||'AI Meal',pts:currentAiMeal.totalPoints,qty:1,totalPts:currentAiMeal.totalPoints,icon:'✨',source:'ai',zero:allZero});
   showToast(`+${currentAiMeal.totalPoints} pts added ✓`,'ok');
   setTimeout(()=>switchScreen('day'),600);
 }
 
 // ══ EDIT LOG ENTRY ═══════════════════════════════════════════════════════════
-let editingItemId = null, editQty = 1, editPtsPerServing = 0;
+let editingItemId = null, editQty = 1, editPtsPerServing = 0, editIsZero = false;
 
 function openEditSheet(id) {
   const item = (weekLog[todayKey]||[]).find(i => i.id === id);
@@ -1790,9 +1798,10 @@ function openEditSheet(id) {
   editingItemId = id;
   editQty = item.qty || 1;
   editPtsPerServing = item.pts || 0;
+  editIsZero = item.zero === true;
   document.getElementById('edit-item-name').textContent = item.name;
-  document.getElementById('edit-item-sub').textContent = editPtsPerServing === 0
-    ? 'ZeroPoint™ food'
+  document.getElementById('edit-item-sub').textContent = editIsZero
+    ? 'Zero-point food'
     : `${editPtsPerServing} pts per serving`;
   document.getElementById('edit-qty-num').textContent = editQty;
   refreshEditPreview();
@@ -1814,8 +1823,10 @@ function editQtyChange(d) {
 function refreshEditPreview() {
   const total = editPtsPerServing * editQty;
   const el = document.getElementById('edit-pts-preview');
-  if (editPtsPerServing === 0) {
-    el.innerHTML = '<strong>0 pts</strong> (ZeroPoint™)';
+  if (editIsZero) {
+    el.innerHTML = '<strong>0 pts</strong> (zero-point food)';
+  } else if (editPtsPerServing === 0) {
+    el.innerHTML = '<strong>0 pts</strong> total';
   } else {
     el.innerHTML = `<strong>${total} pts</strong> total`;
   }
@@ -1853,7 +1864,7 @@ function deleteEditEntry() {
 function updateRecents(item) {
   let recents = DB.get('ww_recent_foods', []);
   recents = recents.filter(r => r.name !== item.name);
-  recents.unshift({ name: item.name, pts: item.pts, icon: item.icon, v: 2, nutrition: item.nutrition || null });
+  recents.unshift({ name: item.name, pts: item.pts, icon: item.icon, v: 2, zero: item.zero === true, nutrition: item.nutrition || null });
   if (recents.length > 20) recents = recents.slice(0, 20);
   DB.set('ww_recent_foods', recents);
 }
@@ -1871,7 +1882,7 @@ function renderRecents() {
   document.getElementById('recents-list').innerHTML = recents.slice(0, 8).map((r, i) => {
     const label = r.name.length > 20 ? r.name.slice(0, 20) + '…' : r.name;
     const legacy = r.v !== 2;
-    const ptsLabel = legacy ? '⚠' : (r.pts === 0 ? '0✓' : r.pts + 'pt');
+    const ptsLabel = legacy ? '⚠' : (r.zero === true ? '0✓' : r.pts + 'pt');
     return `<div class="recent-chip" onclick="quickAddRecent(${i})" title="${legacy?'Logged under the old points program — points unverified':''}">
       <span class="recent-chip-icon">${esc(r.icon)||'🍽️'}</span>
       <span class="recent-chip-name">${esc(label)}</span>
@@ -1891,13 +1902,13 @@ function quickAddRecent(i) {
   }
   // Recompute from stored nutrition when we have it, so plan changes and
   // engine fixes apply to re-logs (not just to first-time logs).
-  let pts = item.pts;
+  let pts = item.pts, itemZero = item.zero === true;
   if (item.nutrition) {
     const n = item.nutrition;
     const r = PointsEngine.calcPoints({ cal:n.cal, sat:n.sat, sug:n.sug, addedSug:n.asug??null, pro:n.pro, fib:n.fib }, item.name, '', planType);
-    if (r.points != null) pts = r.points;
+    if (r.points != null) { pts = r.points; itemZero = r.zero; }
   }
-  pushToLog({ name: item.name, pts, qty: 1, totalPts: pts, icon: item.icon||'🍽️', source: 'recent', nutrition: item.nutrition||null });
+  pushToLog({ name: item.name, pts, qty: 1, totalPts: pts, icon: item.icon||'🍽️', source: 'recent', zero: itemZero, nutrition: item.nutrition||null });
   showToast(`+${pts} pts logged ✓`, 'ok');
 }
 
@@ -2022,7 +2033,7 @@ function logMeal(i){
   const m = meals[i];
   if (!m) return;
   const total = mealTotal(m); // frozen at log time
-  pushToLog({ name: m.name, pts: total, qty: 1, totalPts: total, icon: m.icon||'🍱', source: 'meal', mealId: m.id });
+  pushToLog({ name: m.name, pts: total, qty: 1, totalPts: total, icon: m.icon||'🍱', source: 'meal', zero: m.components.every(c => componentPoints(c).zero), mealId: m.id });
   showToast(total===0 ? `${m.name} logged — 0 pts ✓` : `+${total} pts — ${m.name} ✓`, 'ok');
   setTimeout(()=>switchScreen('day'), 500);
 }

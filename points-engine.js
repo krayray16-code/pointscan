@@ -417,12 +417,25 @@
       sugar = +n.sug || 0;
       if (sugar > 0) flags.push('total-sugar-fallback'); // may overestimate
     }
-    var pts = (+n.cal * 0.0305)
+    var base = (+n.cal * 0.0305)
       + ((+n.sat || 0) * 0.275)
-      + (sugar * 0.12)
-      - ((+n.pro || 0) * 0.098)
-      - ((+n.fib || 0) * 0.098);
-    return { points: Math.max(0, Math.round(pts)), zero: false,
+      + (sugar * 0.12);
+    var credit = ((+n.pro || 0) * 0.098) + ((+n.fib || 0) * 0.098);
+
+    // Cap the protein/fiber credit at half the calorie-driven base. Without a
+    // cap, high-fiber or high-protein processed foods can have their entire
+    // score cancelled out and land on 0 — which would wrongly present them as
+    // zero-point foods. (Real case: a 40-cal, 7g-fiber slice of light bread
+    // scored 0.46 -> "0". WW gives that bread 1 point.) WW's own algorithm
+    // likewise damps these credits rather than letting them run unbounded.
+    // Only the credit is capped; the calorie/fat/sugar side is untouched.
+    var CREDIT_CAP_RATIO = 0.5;
+    if (credit > base * CREDIT_CAP_RATIO) {
+      credit = base * CREDIT_CAP_RATIO;
+      flags.push('credit-capped');
+    }
+
+    return { points: Math.max(0, Math.round(base - credit)), zero: false,
       category: zc.category, categoryId: zc.categoryId,
       reason: zc.reason, flags: flags };
   }
