@@ -85,7 +85,7 @@ console.log('Phase A — live decode (camera shows a real EAN-13):');
   check(await page.locator('#live-scanner').isVisible(), 'iPhone gets the LIVE scanner UI');
   check(!(await page.locator('#photo-scanner').isVisible()), 'photo fallback hidden by default on iPhone');
 
-  await page.click('.scan-start-btn');
+  await page.click('#scanner-idle .btn-primary');
   await page.waitForFunction(() => window.__scannedCode, null, { timeout: 25000 }).catch(() => {});
   const scanned = await page.evaluate(() => window.__scannedCode);
   check(scanned === EXPECTED, `ZXing decoded live barcode on the iOS path (got ${scanned})`);
@@ -99,7 +99,7 @@ console.log('Phase A — live decode (camera shows a real EAN-13):');
   check(await page.evaluate(() => !document.getElementById('scanner-video').srcObject), 'camera released after successful scan');
 
   // Logging it clears the card so the next visit reopens the camera
-  await page.click('.add-log-btn');
+  await page.click('.prod-add .btn-primary');
   await page.waitForTimeout(300);
   check(!(await page.locator('#prod-result').evaluate(el => el.classList.contains('show'))), 'result card cleared after logging');
   check(await page.locator('#hero-used').textContent() === '9', 'scanned item logged to the day (9 pts)');
@@ -113,8 +113,8 @@ console.log('Phase A2 — decoder core and photo upload path:');
 
   // The built-in Scanner Check renders a barcode and decodes it. This proves
   // the decode core works on this browser independently of any camera.
-  await page.click('#nav-settings');
-  await page.click('text=Run Scanner Check');
+  await page.evaluate(() => switchScreen('settings'));
+  await page.click('text=Run scanner check');
   await page.waitForFunction(() => {
     const t = document.getElementById('scan-diag-out');
     return t && t.textContent.includes('decoder self-test');
@@ -225,20 +225,20 @@ console.log('Phase B — camera lifecycle (blank camera):');
 {
   const { browser, page } = await openIphone('blank.y4m');
   await page.click('#nav-scan');
-  await page.click('.scan-start-btn');
+  await page.click('#scanner-idle .btn-primary');
   await page.waitForTimeout(1500);
   check(await page.locator('#video-wrap').evaluate(el => el.classList.contains('active')), 'camera opens and live video is shown');
   check(await page.evaluate(() => { const v = document.getElementById('scanner-video'); return !!v.srcObject && v.videoWidth > 0; }), 'video stream is actually playing (has dimensions)');
-  check(await page.locator('#scan-status-bar').evaluate(el => el.classList.contains('active')), 'scanning status bar visible');
+  check(await page.locator('#video-wrap').evaluate(el => el.classList.contains('active')), 'live view active');
   check(await page.locator('#torch-btn').isHidden(), 'torch button hidden when device reports no torch capability');
 
   // Stop button releases the camera
-  await page.click('.scan-stop-btn');
+  await page.click('#video-wrap .cam-round:last-child');
   await page.waitForTimeout(300);
   check(await page.evaluate(() => !document.getElementById('scanner-video').srcObject), 'Stop button releases the camera');
 
   // Leaving the screen releases the camera
-  await page.click('.scan-start-btn');
+  await page.click('#scanner-idle .btn-primary');
   await page.waitForTimeout(900);
   await page.click('#nav-day');
   await page.waitForTimeout(400);

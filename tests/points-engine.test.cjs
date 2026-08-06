@@ -72,6 +72,21 @@ ok(isZero('Air-fried potato'), 'air-fried (no oil) potato IS zero');
   }), 'every add-in is pointed (none can sneak in as zero)');
 }
 
+
+// ── negations and over-broad markers (found by the DB validation pass) ──
+{
+  ok(isZero('Celery sticks'), 'celery sticks are zero ("stick" must not mean processed)');
+  ok(isZero('Carrot sticks'), 'carrot sticks are zero');
+  ok(!isZero('Fish sticks'), 'fish sticks still NOT zero');
+  ok(!isZero('Mozzarella sticks'), 'mozzarella sticks still NOT zero');
+  ok(isZero('Side salad (no dressing)'), 'an explicitly undressed salad is zero');
+  ok(isZero('Broccoli, no butter'), '"no butter" is honoured');
+  ok(isZero('Baked potato without butter'), '"without butter" is honoured');
+  ok(isZero('Chicken breast, no skin'), '"no skin" is honoured');
+  ok(!isZero('Salad with ranch dressing'), 'a dressed salad is still NOT zero');
+  ok(!isZero('Baked potato with butter'), 'butter without a negation still counts');
+}
+
 // ══ TRAP CASES: oats ══
 ok(isZero('Plain rolled oats'), 'plain rolled oats are zero');
 ok(isZero('Oatmeal'), 'oatmeal is zero');

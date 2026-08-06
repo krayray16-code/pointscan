@@ -93,7 +93,8 @@
     'quesadilla', 'burrito', 'enchilada', 'sandwich', 'wrap', 'panini',
     'sushi', 'tortilla', 'dumpling', 'pierogi', 'pot pie',
     // processed meats
-    'nugget', 'tender', 'strip', 'stick', 'patty', 'burger', 'sausage', 'bacon',
+    'nugget', 'tender', 'strip', 'patty', 'burger', 'sausage', 'bacon',
+    'fish stick', 'cheese stick', 'mozzarella stick', 'chicken stick',
     'jerky', 'deli', 'ham', 'salami', 'pepperoni', 'bologna', 'hot dog',
     'corn dog', 'meatball', 'meatloaf', 'wing', 'rotisserie', 'imitation',
     'smoked', 'cured', 'orange chicken', 'sesame chicken', 'general tso',
@@ -305,10 +306,15 @@
   }
 
   function normalizeName(s) {
-    // "air fried"/"air-fried" (no oil) is an allowed cooking method — rewrite
-    // it so the 'fried'/'fry' processed markers don't fire on it.
     return String(s || '').toLowerCase()
-      .replace(/\bair[\s-]?fr(?:ied|y|yer)\b/g, 'airprepared');
+      // "air fried"/"air-fried" (no oil) is an allowed cooking method — rewrite
+      // it so the 'fried'/'fry' processed markers don't fire on it.
+      .replace(/\bair[\s-]?fr(?:ied|y|yer)\b/g, 'airprepared')
+      // Drop explicitly negated ingredients so "side salad (no dressing)" and
+      // "broccoli, no butter" aren't read as containing dressing or butter.
+      .replace(/\b(?:no|without|w\/o|hold the|minus)\s+(?:the\s+)?[a-z]+(?:\s+[a-z]+)?\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   /**

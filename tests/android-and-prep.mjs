@@ -78,7 +78,7 @@ await page.waitForTimeout(400);
 
 console.log('Android path (native BarcodeDetector):');
 await page.click('#nav-scan');
-await page.click('.scan-start-btn');
+await page.click('#scanner-idle .btn-primary');
 await page.waitForFunction(() => window.__scannedCode, null, { timeout: 20000 }).catch(() => {});
 check(await page.evaluate(() => window.__usedNative === true), 'Android uses the NATIVE BarcodeDetector (not ZXing)');
 check(await page.evaluate(() => window.__scannedCode) === EXPECTED, 'native path decoded and looked up the barcode');
@@ -88,7 +88,7 @@ check((await page.locator('#pts-display').textContent()).trim() === '9', 'same e
 console.log('Regression — light bread must not be a "zero-point food":');
 await page.click('#nav-scan');
 await page.fill('#manual-barcode', '049000028911');
-await page.click('text=Look Up');
+await page.click('text=Look up');
 await page.waitForTimeout(900);
 check((await page.locator('#prod-name').textContent()).includes('Italian Bread'), 'bread product looked up');
 const breadPts = (await page.locator('#pts-display').textContent()).trim();
@@ -96,15 +96,15 @@ check(breadPts === '1', 'light bread = 1 pt, not 0 (got ' + breadPts + ')');
 check(await page.locator('#zero-msg').isHidden(), 'NO "Zero-point food!" badge on bread');
 check((await page.locator('#pts-lbl').textContent()).trim() === 'WW Points', 'label reads "WW Points", not the retired PersonalPoints branding');
 // And it must not carry a zero badge into the day log either
-await page.click('.add-log-btn');
+await page.click('.prod-add .btn-primary');
 await page.waitForTimeout(400);
 await page.click('#nav-day');
 await page.waitForTimeout(300);
-check(await page.locator('.log-item', { hasText: 'Italian Bread' }).locator('.zero-badge').count() === 0, 'no ZERO badge on the logged bread entry');
+check(await page.locator('.log-item', { hasText: 'Italian Bread' }).locator('.badge-zero').count() === 0, 'no ZERO badge on the logged bread entry');
 // A genuine zero-point food still gets its badge
 await page.evaluate(() => pushToLog({ name: 'Banana', pts: 0, qty: 1, totalPts: 0, icon: '🍌', source: 'search', zero: true }));
 await page.waitForTimeout(300);
-check(await page.locator('.log-item', { hasText: 'Banana' }).locator('.zero-badge').count() === 1, 'real zero-point food still shows the ZERO badge');
+check(await page.locator('.log-item', { hasText: 'Banana' }).locator('.badge-zero').count() === 1, 'real zero-point food still shows the ZERO badge');
 
 console.log('Mashed potato / add-ins flow:');
 await page.click('#nav-search');
@@ -136,12 +136,12 @@ await page.evaluate(() => prepQty('ai-butter', 1));
 await page.waitForTimeout(150);
 check((await page.locator('#prep-total').textContent()) === '6 pts', '+ 1 tbsp butter = 6 pts total');
 // Back to plain
-await page.click('.prep-plain-row');
+await page.click('.plain-row');
 await page.waitForTimeout(150);
 check((await page.locator('#prep-total').textContent()) === '0 pts', '"Plain — nothing added" resets to 0');
 
 await page.evaluate(() => prepQty('ai-oliveoil', 1));
-await page.click('text=Log It');
+await page.click('text=Log it');
 await page.waitForTimeout(300);
 const res = await page.evaluate(() => window.__prepResult);
 check(res && res.pts === 1, 'confirm returns 1 pt');

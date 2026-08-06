@@ -40,15 +40,15 @@ check(await page.locator('#hero-budget').textContent() === '23', 'default budget
 // Meals screen: starter meals seeded
 await page.click('#nav-meals');
 await page.waitForTimeout(200);
-const mealCards = await page.locator('.meal-card').count();
+const mealCards = await page.locator('.meal').count();
 check(mealCards === 4, 'four starter meals seeded (' + mealCards + ')');
-const bowlPts = await page.locator('.meal-card', { hasText: 'Grilled Chicken Power Bowl' }).locator('.meal-card-pts').textContent();
+const bowlPts = await page.locator('.meal', { hasText: 'Grilled Chicken Power Bowl' }).locator('.meal-pts').textContent();
 check(bowlPts.trim() === '0', 'all-zero starter meal shows 0 pts');
-const tacoPts = await page.locator('.meal-card', { hasText: 'Turkey Taco Night' }).locator('.meal-card-pts').textContent();
+const tacoPts = await page.locator('.meal', { hasText: 'Turkey Taco Night' }).locator('.meal-pts').textContent();
 check(tacoPts.trim() === '10', 'turkey tacos = 10 pts');
 
 // One-tap log
-await page.locator('.meal-card', { hasText: 'Turkey Taco Night' }).locator('.meal-log-btn').click();
+await page.locator('.meal', { hasText: 'Turkey Taco Night' }).locator('.btn-primary').click();
 await page.waitForTimeout(800);
 check(await page.locator('#hero-used').textContent() === '10', 'logging meal updates day total to 10');
 
@@ -58,23 +58,23 @@ await page.click('#new-meal-btn');
 await page.fill('#mb-name', 'Test Meal');
 await page.fill('#mb-search', 'banana');
 await page.waitForTimeout(200);
-await page.locator('.mb-sr-item').first().click();
+await page.locator('.picker-item').first().click();
 await page.fill('#mb-search', 'peanut');
 await page.waitForTimeout(200);
-await page.locator('.mb-sr-item').first().click();
+await page.locator('.picker-item').first().click();
 const builderTotal = await page.locator('#mb-total').textContent();
 check(builderTotal === '6 pts', 'builder total = banana(0) + PB(6) = 6 (' + builderTotal + ')');
 // qty bump on PB → 1.5 servings → round(6*1.5)=9
-await page.locator('.mb-comp-row', { hasText: 'Peanut butter' }).locator('.mb-qty button').nth(1).click();
+await page.locator('.comp-row', { hasText: 'Peanut butter' }).locator('.mini-step button').nth(1).click();
 check(await page.locator('#mb-total').textContent() === '9 pts', 'qty 1.5 → 9 pts');
-await page.click('text=Save Meal');
+await page.click('text=Save meal');
 await page.waitForTimeout(300);
-check(await page.locator('.meal-card').count() === 5, 'saved meal appears in list');
+check(await page.locator('.meal').count() === 5, 'saved meal appears in list');
 
 // Editing a meal does not change past logs
-await page.locator('.meal-card', { hasText: 'Turkey Taco Night' }).locator('.meal-edit-btn').click();
-await page.locator('.mb-comp-row', { hasText: 'tortilla' }).locator('.li-del').click();
-await page.click('text=Save Meal');
+await page.locator('.meal', { hasText: 'Turkey Taco Night' }).locator('.btn-ghost').click();
+await page.locator('.comp-row', { hasText: 'tortilla' }).locator('.li-del').click();
+await page.click('text=Save meal');
 await page.waitForTimeout(300);
 await page.click('#nav-day');
 await page.waitForTimeout(300);
@@ -88,21 +88,21 @@ await page.waitForTimeout(500);
 check(await page.locator('.sri').count() >= 2, 'local DB search returns potato results offline');
 check((await page.locator('#zero-banner').textContent()).includes('zero-point'), 'zero banner shows for potato');
 const chipsRow = page.locator('.sri', { hasText: 'Potato chips' });
-check(await chipsRow.locator('.zero-badge').count() === 0, 'potato chips NOT marked zero in search');
+check(await chipsRow.locator('.badge-zero').count() === 0, 'potato chips NOT marked zero in search');
 
 // Manual barcode: malformed input rejected without crash
 await page.click('#nav-scan');
 await page.fill('#manual-barcode', 'abc123');
-await page.click('text=Look Up');
+await page.click('text=Look up');
 await page.waitForTimeout(300);
 check((await page.locator('#toast').textContent()).includes('valid'), 'malformed barcode shows clear message');
 await page.fill('#manual-barcode', '049000028912'); // bad checksum
-await page.click('text=Look Up');
+await page.click('text=Look up');
 await page.waitForTimeout(300);
 check((await page.locator('#toast').textContent()).includes('checksum'), 'checksum failure shows clear message');
 
 // Plan toggle: diabetic makes banana pointed
-await page.click('#nav-settings');
+await page.evaluate(() => switchScreen('settings'));
 await page.click('#plan-btn-diabetic');
 await page.waitForTimeout(300);
 check((await page.locator('#plan-desc').textContent()).includes('Diabetic'), 'diabetic plan description shown');
@@ -111,11 +111,11 @@ await page.fill('#food-search-input', 'banana');
 await page.click('#search-btn');
 await page.waitForTimeout(500);
 const bananaRow = page.locator('.sri', { hasText: 'Banana (medium)' });
-const bananaPts = await bananaRow.locator('.sri-pts-num').textContent();
+const bananaPts = await bananaRow.locator('.sri-pts-n').textContent();
 check(bananaPts.trim() === '3', 'diabetic: banana = 3 pts (' + bananaPts + ')');
 check((await page.locator('#zero-banner').textContent()).includes('diabetic'), 'diabetic info banner for banana');
 // back to standard
-await page.click('#nav-settings');
+await page.evaluate(() => switchScreen('settings'));
 await page.click('#plan-btn-standard');
 await page.waitForTimeout(200);
 
@@ -123,7 +123,7 @@ await page.waitForTimeout(200);
 await page.click('#plan-btn-diabetic');
 await page.click('#nav-meals');
 await page.waitForTimeout(200);
-const bowlDia = await page.locator('.meal-card', { hasText: 'Grilled Chicken Power Bowl' }).locator('.meal-card-pts').textContent();
+const bowlDia = await page.locator('.meal', { hasText: 'Grilled Chicken Power Bowl' }).locator('.meal-pts').textContent();
 check(bowlDia.trim() === '4', 'diabetic: chicken bowl shows potato points (4), (' + bowlDia + ')');
 
 const realErrors = errors.filter(e => !/net::ERR_FAILED|Failed to load resource|ERR_ABORTED/.test(e));

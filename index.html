@@ -14,552 +14,605 @@
      third-party request would otherwise leave iOS with no scanner at all.
      @zxing/library 0.19.1 — Apache-2.0, see vendor/zxing-LICENSE -->
 <script src="./vendor/zxing-0.19.1.min.js"></script>
-<script src="./points-engine.js"></script>
-<script src="./food-db.js"></script>
+<script src="./points-engine.js?v=6"></script>
+<script src="./food-db.js?v=6"></script>
+<script src="./week-engine.js?v=6"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
-
-:root {
-  --teal: #00857c;
-  --teal-light: #e0f4f3;
-  --teal-mid: #b2e0dd;
-  --teal-dark: #005f58;
-  --purple: #7c4daa;
-  --purple-light: #f3edf9;
-  --amber: #e07b00;
-  --amber-light: #fff3e0;
-  --red: #d32f2f;
-  --red-light: #fdecea;
-  --green: #2e7d32;
-  --green-light: #e8f5e9;
-  --bg: #f7f7f7;
-  --surface: #ffffff;
-  --border: #e8e8e8;
-  --ink: #1a1a1a;
-  --ink2: #666;
-  --ink3: #999;
-  --radius: 16px;
-  --shadow: 0 2px 16px rgba(0,0,0,0.07);
-  --shadow-sm: 0 1px 4px rgba(0,0,0,0.06);
-  /* Height of the fixed bottom bar INCLUDING the iPhone home-indicator inset.
-     JS overwrites this with the measured value on load/resize; this fallback
-     keeps the layout correct before that runs. */
-  --nav-h: calc(62px + env(safe-area-inset-bottom));
+/* ═══════════════════════════════════════════════════════════════════════════
+   PointScan design system
+   System font stack: renders instantly, needs no third-party request, and
+   looks native (SF Pro on iOS). Replaces the previous Google Fonts @import.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  /* brand */
+  --brand:#0b7b72; --brand-700:#065f58; --brand-600:#0a6f67;
+  --brand-50:#e8f5f3; --brand-100:#cfe9e6; --brand-200:#a7d6d1;
+  /* semantic */
+  --green:#17803d; --green-50:#e9f7ee;
+  --amber:#b45309; --amber-50:#fdf3e7;
+  --red:#b42318;   --red-50:#fdeceb;
+  --violet:#6d4aa8; --violet-50:#f2edfa;
+  /* neutrals */
+  --bg:#f4f5f6; --surface:#ffffff; --surface-2:#fafbfb;
+  --border:#e6e8ea; --border-strong:#d3d7da;
+  --ink:#14181b; --ink-2:#5b6469; --ink-3:#8a9296;
+  /* shape */
+  --r-xs:8px; --r-sm:10px; --r:14px; --r-lg:18px; --r-xl:22px;
+  --sh-sm:0 1px 2px rgba(16,24,40,.06);
+  --sh:0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.04);
+  --sh-lg:0 8px 24px rgba(16,24,40,.10), 0 2px 6px rgba(16,24,40,.05);
+  --sh-up:0 -6px 24px rgba(16,24,40,.10);
+  /* bottom bar height incl. the iPhone home-indicator inset; JS overwrites
+     this with the measured value so nothing is ever hidden behind the bar. */
+  --nav-h:calc(60px + env(safe-area-inset-bottom));
+  --font:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --num:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',Roboto,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-/* body must be min-height, not height: with border-box, a fixed height:100%
-   pins the body box to the viewport, so its padding-bottom lands at the fold
-   and taller content just overflows past it — the reserved space is ignored
-   and the last controls end up under the fixed bar. */
+/* body must be min-height, not height: a fixed height:100% with border-box
+   pins the body box to the viewport, so padding-bottom lands at the fold and
+   taller content overflows past it — content ends up under the fixed bar. */
 html{height:100%;-webkit-text-size-adjust:100%;}
-body{min-height:100%;}
-/* Reserve the real bar height (not a fixed 80px) so the last element on a
-   page — e.g. "Add to Today's Log" after a scan — is never hidden behind it. */
-body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padding-bottom:calc(var(--nav-h) + 18px);-webkit-font-smoothing:antialiased;}
+body{min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--font);
+  font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding-bottom:calc(var(--nav-h) + 20px);overscroll-behavior-y:none;}
+button,input,select,textarea{font-family:inherit;}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent;}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;}
 
-/* ── NAV BAR ── */
-.nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;padding:9px 0 7px;cursor:pointer;color:var(--ink3);transition:color .2s;gap:3px;-webkit-tap-highlight-color:transparent;}
-.nav-item.active{color:var(--teal);}
-.nav-icon{font-size:1.35rem;line-height:1;}
-.nav-label{font-size:.62rem;font-weight:700;letter-spacing:.03em;}
-
-/* ── SCREENS ── */
-/* dvh tracks Safari's collapsing toolbars; vh is the fallback. */
+/* ── screens & header ── */
 .screen{display:none;min-height:100vh;min-height:100dvh;}
 .screen.active{display:block;}
+.content{padding:14px 16px 8px;}
+.app-header{background:rgba(255,255,255,.88);backdrop-filter:saturate(180%) blur(14px);
+  -webkit-backdrop-filter:saturate(180%) blur(14px);
+  padding:14px 16px 12px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:40;display:flex;align-items:flex-start;gap:12px;}
+.app-header h2{font-family:var(--num);font-weight:700;font-size:1.42rem;letter-spacing:-.02em;line-height:1.15;}
+.app-header p{font-size:.79rem;color:var(--ink-2);margin-top:2px;}
+.header-main{flex:1;min-width:0;}
+.icon-btn{width:38px;height:38px;border-radius:50%;background:var(--surface-2);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-size:1rem;flex-shrink:0;transition:background .15s;}
+.icon-btn:active{background:var(--brand-50);}
 
-/* ── PAGE HEADER ── */
-.page-header{background:var(--surface);padding:20px 20px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:40;}
-.page-header h2{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.4rem;color:var(--ink);}
-.page-header p{font-size:.78rem;color:var(--ink2);margin-top:2px;}
+/* ── cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--sh-sm);overflow:hidden;margin-bottom:12px;}
+.card-pad{padding:16px;}
+.card-title{font-family:var(--num);font-weight:650;font-size:.95rem;letter-spacing:-.01em;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+.section-label{font-size:.72rem;font-weight:700;color:var(--ink-3);text-transform:uppercase;
+  letter-spacing:.07em;margin:18px 2px 8px;}
 
-/* ── MY DAY ── */
-.day-content{padding:16px;}
+/* ── hero ── */
+.hero{background:linear-gradient(150deg,var(--brand) 0%,var(--brand-700) 100%);
+  border-radius:var(--r-xl);padding:18px 18px 16px;color:#fff;position:relative;
+  overflow:hidden;margin-bottom:12px;box-shadow:0 6px 20px rgba(11,123,114,.24);}
+.hero::after{content:'';position:absolute;top:-70px;right:-50px;width:190px;height:190px;
+  background:radial-gradient(circle,rgba(255,255,255,.13),transparent 70%);border-radius:50%;}
+.hero-top{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:.72rem;font-weight:600;letter-spacing:.04em;opacity:.85;
+  text-transform:uppercase;position:relative;z-index:1;}
+.hero-main{display:flex;align-items:flex-end;gap:10px;margin-top:8px;position:relative;z-index:1;}
+.hero-big{font-family:var(--num);font-weight:700;font-size:3.4rem;line-height:.95;letter-spacing:-.035em;}
+.hero-unit{font-size:.86rem;opacity:.85;padding-bottom:7px;font-weight:500;}
+.hero-bar{margin-top:14px;position:relative;z-index:1;}
+.hero-track{background:rgba(255,255,255,.22);border-radius:99px;height:7px;overflow:hidden;}
+.hero-fill{height:100%;border-radius:99px;background:#fff;transition:width .45s cubic-bezier(.4,0,.2,1);}
+.hero-fill.warn{background:#ffd36e;}
+.hero-fill.over{background:#ff9b7a;}
+.hero-legend{display:flex;justify-content:space-between;margin-top:7px;font-size:.71rem;opacity:.85;}
+.hero-chips{display:flex;gap:8px;margin-top:14px;position:relative;z-index:1;}
+.hero-chip{flex:1;background:rgba(255,255,255,.14);border-radius:var(--r-sm);padding:8px 10px;}
+.hero-chip-n{font-family:var(--num);font-weight:700;font-size:1.12rem;line-height:1.1;}
+.hero-chip-l{font-size:.66rem;opacity:.85;margin-top:1px;}
 
-/* Points hero */
-.points-hero{background:var(--teal);border-radius:var(--radius);padding:20px;margin-bottom:14px;color:#fff;position:relative;overflow:hidden;}
-.points-hero::before{content:'';position:absolute;top:-30px;right:-30px;width:140px;height:140px;background:rgba(255,255,255,.06);border-radius:50%;}
-.points-hero::after{content:'';position:absolute;bottom:-40px;right:20px;width:100px;height:100px;background:rgba(255,255,255,.04);border-radius:50%;}
-.hero-date{font-size:.72rem;font-weight:700;opacity:.8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;}
-.hero-row{display:flex;gap:0;align-items:stretch;}
-.hero-block{flex:1;text-align:center;position:relative;z-index:1;}
-.hero-block+.hero-block::before{content:'';position:absolute;left:0;top:15%;height:70%;width:1px;background:rgba(255,255,255,.25);}
-.hero-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:2.6rem;line-height:1;}
-.hero-num.zero{color:#a5f3ee;}
-.hero-lbl{font-size:.68rem;font-weight:700;opacity:.75;margin-top:2px;letter-spacing:.04em;text-transform:uppercase;}
-.hero-sub{font-size:.7rem;opacity:.65;margin-top:3px;}
+/* ── weeklies ledger ── */
+.ledger{display:flex;flex-direction:column;gap:0;}
+.ledger-row{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 0;border-bottom:1px dashed var(--border);font-size:.85rem;}
+.ledger-row:last-child{border-bottom:none;}
+.ledger-row.total{border-top:1.5px solid var(--border);border-bottom:none;
+  margin-top:2px;padding-top:11px;font-weight:650;}
+.ledger-label{color:var(--ink-2);display:flex;align-items:center;gap:7px;}
+.ledger-val{font-family:var(--num);font-weight:650;font-variant-numeric:tabular-nums;}
+.ledger-val.pos{color:var(--green);}
+.ledger-val.neg{color:var(--amber);}
+.ledger-val.total-n{font-size:1.28rem;color:var(--brand);}
+.ledger-val.total-n.danger{color:var(--red);}
+.ledger-note{font-size:.72rem;color:var(--ink-3);line-height:1.5;margin-top:10px;}
+.overspent-banner{background:var(--red-50);border:1px solid #f2c7c3;border-radius:var(--r-sm);
+  padding:9px 11px;font-size:.76rem;color:var(--red);font-weight:600;margin-top:10px;line-height:1.45;}
 
-/* Progress bar */
-.prog-bar-wrap{margin-top:14px;position:relative;z-index:1;}
-.prog-bar-track{background:rgba(255,255,255,.2);border-radius:99px;height:8px;overflow:hidden;}
-.prog-bar-fill{height:100%;border-radius:99px;background:#fff;transition:width .5s cubic-bezier(.4,0,.2,1);}
-.prog-bar-fill.warn{background:#ffd54f;}
-.prog-bar-fill.over{background:#ff8a65;}
-.prog-bar-labels{display:flex;justify-content:space-between;margin-top:5px;font-size:.65rem;opacity:.7;}
+/* ── week strip ── */
+.week-strip{display:flex;gap:5px;}
+.wday{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;}
+.wday-l{font-size:.65rem;color:var(--ink-3);font-weight:600;}
+.wday-dot{width:100%;aspect-ratio:1;max-width:38px;border-radius:11px;background:var(--surface-2);
+  border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-size:.72rem;font-weight:650;color:var(--ink-2);font-variant-numeric:tabular-nums;
+  transition:all .2s;font-family:var(--num);}
+.wday-dot.good{background:var(--brand-50);border-color:var(--brand-200);color:var(--brand-700);}
+.wday-dot.over{background:var(--amber-50);border-color:#f0d5ab;color:var(--amber);}
+.wday-dot.today{border-color:var(--brand);border-width:2px;color:var(--brand);background:#fff;}
+.wday-dot.today.good{background:var(--brand-50);}
 
-/* Weekly strip */
-.weekly-strip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
-.weekly-strip-title{font-size:.72rem;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
-.weekly-days{display:flex;gap:4px;}
-.wday{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
-.wday-label{font-size:.6rem;color:var(--ink3);font-weight:700;}
-.wday-dot{width:28px;height:28px;border-radius:50%;background:var(--bg);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:var(--ink2);transition:all .3s;}
-.wday-dot.today{border-color:var(--teal);color:var(--teal);}
-.wday-dot.over{background:var(--red-light);border-color:var(--red);color:var(--red);}
-.wday-dot.good{background:var(--teal-light);border-color:var(--teal);color:var(--teal);}
+/* ── quick actions ── */
+.quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
+.quick-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:11px 4px 9px;text-align:center;box-shadow:var(--sh-sm);transition:transform .12s,background .15s;}
+.quick-btn:active{transform:scale(.96);background:var(--brand-50);}
+.quick-ico{font-size:1.2rem;line-height:1;}
+.quick-lbl{font-size:.68rem;font-weight:600;color:var(--ink-2);margin-top:5px;}
 
-/* Quick add bar */
-.quick-add-bar{display:flex;gap:8px;margin-bottom:14px;}
-.qa-btn{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 8px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;-webkit-tap-highlight-color:transparent;}
-.qa-btn:active{background:var(--teal-light);}
-.qa-btn-icon{font-size:1.2rem;}
-.qa-btn-lbl{font-size:.68rem;font-weight:700;color:var(--ink2);margin-top:3px;}
+/* ── log list ── */
+.log-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:11px 12px;margin-bottom:8px;display:flex;align-items:center;gap:11px;
+  box-shadow:var(--sh-sm);animation:rise .18s ease;}
+@keyframes rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.li-ico{font-size:1.15rem;flex-shrink:0;width:26px;text-align:center;}
+.li-body{flex:1;min-width:0;}
+.li-name{font-size:.88rem;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.li-meta{font-size:.7rem;color:var(--ink-3);margin-top:2px;}
+.li-pts{font-family:var(--num);font-weight:700;font-size:1.05rem;min-width:34px;text-align:right;
+  color:var(--ink);font-variant-numeric:tabular-nums;}
+.li-pts.zero{color:var(--green);}
+.li-del{background:none;border:none;color:var(--ink-3);font-size:1rem;padding:8px;
+  margin:-8px -4px -8px 0;line-height:1;flex-shrink:0;transition:color .15s;}
+.li-del:active{color:var(--red);}
+.badge-zero{display:inline-block;background:var(--green-50);color:var(--green);border-radius:5px;
+  font-size:.58rem;font-weight:700;padding:2px 5px;margin-left:5px;vertical-align:middle;letter-spacing:.03em;}
 
-/* Food log */
-.log-section-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;color:var(--ink);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
-.log-section-title span{font-size:.7rem;font-weight:600;color:var(--ink3);cursor:pointer;padding:4px 8px;margin:-4px -8px;-webkit-tap-highlight-color:transparent;}
-.log-empty{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;text-align:center;color:var(--ink3);font-size:.82rem;}
-.log-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-sm);animation:fadeUp .2s ease;}
-@keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-.li-icon{font-size:1.1rem;flex-shrink:0;}
-.li-info{flex:1;min-width:0;}
-.li-name{font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.li-meta{font-size:.68rem;color:var(--ink2);margin-top:2px;}
-.li-pts{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.1rem;color:var(--teal);min-width:36px;text-align:right;}
-.li-pts.zero-pts{color:var(--green);}
-.li-del{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:1rem;padding:8px;margin:-8px -4px -8px 0;line-height:1;transition:color .2s;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
-.li-del:hover{color:var(--red);}
-.zero-badge{display:inline-block;background:var(--green);color:#fff;border-radius:20px;font-size:.55rem;font-weight:800;padding:1px 5px;margin-left:4px;vertical-align:middle;letter-spacing:.04em;}
+/* ── empty states ── */
+.empty{background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--r-lg);
+  padding:30px 22px;text-align:center;}
+.empty-ico{font-size:1.9rem;opacity:.5;}
+.empty-t{font-size:.88rem;font-weight:600;margin-top:9px;}
+.empty-s{font-size:.78rem;color:var(--ink-3);margin-top:4px;line-height:1.5;}
 
-/* ── SCAN SCREEN ── */
-.scan-content{padding:16px;}
+/* ── buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;
+  border-radius:99px;font-weight:650;font-size:.9rem;padding:12px 20px;transition:opacity .15s,transform .12s;
+  font-family:var(--font);letter-spacing:-.01em;}
+.btn:active{transform:scale(.98);opacity:.9;}
+.btn:disabled{opacity:.45;}
+.btn-primary{background:var(--brand);color:#fff;}
+.btn-block{width:100%;}
+.btn-ghost{background:var(--surface);border:1.5px solid var(--border-strong);color:var(--ink);}
+.btn-danger{background:var(--red-50);border:1.5px solid #f0c4c0;color:var(--red);}
+.btn-sm{padding:8px 14px;font-size:.79rem;}
+.btn-chip{background:var(--brand-50);border:1px solid var(--brand-100);color:var(--brand-700);
+  border-radius:99px;padding:7px 13px;font-size:.76rem;font-weight:600;}
 
-/* Photo capture */
-.capture-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow-sm);}
-.capture-idle{padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;}
-.capture-idle-icon{font-size:2.8rem;animation:breathe 2.5s ease-in-out infinite;}
-@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-.capture-idle-txt{font-size:.82rem;color:var(--ink2);line-height:1.5;}
-#barcode-file-input{display:none;}
-.capture-btn{display:inline-block;background:var(--teal);color:#fff;border-radius:99px;padding:12px 28px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;transition:opacity .15s;}
-.capture-btn:active{opacity:.85;}
-.photo-preview{display:none;flex-direction:column;align-items:center;padding:14px;gap:10px;border-top:1px solid var(--border);}
-.photo-preview.show{display:flex;}
-#barcode-preview{width:100%;max-height:200px;object-fit:contain;border-radius:8px;background:var(--bg);}
-.preview-btns{display:flex;gap:8px;width:100%;}
-.decode-btn{flex:1;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:11px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;cursor:pointer;}
-.decode-btn:disabled{opacity:.5;cursor:not-allowed;}
-.retake-btn{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:11px 16px;font-size:.82rem;font-weight:600;color:var(--ink);cursor:pointer;}
-
-/* Live scanner (Android/Chrome) */
-.live-scanner-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;}
-#video-wrap{position:relative;width:100%;aspect-ratio:4/3;background:#000;display:none;}
-#video-wrap.active{display:block;}
-#scanner-video{width:100%;height:100%;object-fit:cover;}
-.scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
-.scan-frame{width:70%;aspect-ratio:2.5/1;border:2.5px solid var(--teal);border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);position:relative;}
-.scan-line{position:absolute;left:0;right:0;height:2px;background:var(--teal);animation:scanLine 1.8s ease-in-out infinite;}
-@keyframes scanLine{0%,100%{top:10%}50%{top:85%}}
-.scanner-idle-inner{padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;}
-.scan-start-btn{background:var(--teal);color:#fff;border:none;border-radius:99px;padding:12px 28px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;}
-.scan-stop-btn{background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:.8rem;font-weight:700;cursor:pointer;}
-.scan-status-bar{display:none;padding:10px 16px;border-top:1px solid var(--border);align-items:center;justify-content:space-between;}
-.scan-status-bar.active{display:flex;}
-
-/* Manual entry */
-.input-row{display:flex;gap:8px;margin-bottom:14px;}
-.txt-input{flex:1;min-width:0;background:var(--surface);border:1.5px solid var(--border);border-radius:99px;padding:11px 16px;font-family:'DM Sans',sans-serif;font-size:16px;color:var(--ink);outline:none;transition:border-color .2s;}
-.txt-input:focus{border-color:var(--teal);}
-.txt-input::placeholder{color:var(--ink3);}
-.teal-btn{background:var(--teal);color:#fff;border:none;border-radius:99px;padding:11px 18px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;cursor:pointer;white-space:nowrap;}
-.teal-btn:disabled{opacity:.5;cursor:not-allowed;}
-
-/* Product result card */
-.prod-result{display:none;}
-.prod-result.show{display:block;}
-.prod-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);}
-.prod-top{display:flex;gap:12px;padding:14px;border-bottom:1px solid var(--border);align-items:center;}
-.prod-img{width:56px;height:56px;object-fit:contain;border-radius:8px;background:var(--bg);flex-shrink:0;}
-.prod-img-ph{width:56px;height:56px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0;}
-.prod-name{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;line-height:1.3;}
-.prod-brand{font-size:.7rem;color:var(--ink2);margin-top:2px;}
-.prod-pts-row{display:flex;align-items:center;padding:14px;border-bottom:1px solid var(--border);gap:14px;}
-.prod-pts-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:3.2rem;line-height:1;color:var(--teal);}
-.prod-pts-num.high{color:var(--red);}
-.prod-pts-num.med{color:var(--amber);}
-.prod-pts-num.zero-pts{color:var(--green);}
-.prod-pts-info{flex:1;}
-.prod-pts-lbl{font-size:.78rem;font-weight:700;color:var(--ink2);}
-.prod-serv{font-size:.72rem;color:var(--ink3);margin-top:3px;}
-.prod-zero-msg{background:var(--green-light);border-radius:8px;padding:6px 10px;font-size:.72rem;color:var(--green);font-weight:700;margin-top:6px;}
-.nutr-row{display:flex;padding:12px 14px;gap:0;border-bottom:1px solid var(--border);}
-.nutr-cell{flex:1;text-align:center;border-right:1px solid var(--border);}
-.nutr-cell:last-child{border-right:none;}
-.nutr-val{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;}
-.nutr-key{font-size:.6rem;color:var(--ink2);margin-top:1px;text-transform:uppercase;letter-spacing:.04em;}
-.add-food-row{display:flex;align-items:center;gap:10px;padding:12px 14px;}
-.qty-ctrl{display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--border);border-radius:99px;overflow:hidden;}
-.qty-btn{background:none;border:none;color:var(--ink);font-size:1.2rem;padding:10px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.qty-num{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;min-width:26px;text-align:center;}
-.add-log-btn{flex:1;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:12px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.88rem;cursor:pointer;}
-
-/* ── MEALS SCREEN ── */
-.meals-content{padding:16px;}
-.meal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:var(--shadow-sm);display:flex;align-items:center;gap:12px;}
-.meal-card-icon{font-size:1.6rem;flex-shrink:0;}
-.meal-card-info{flex:1;min-width:0;}
-.meal-card-name{font-family:'Nunito',sans-serif;font-weight:800;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.meal-card-sub{font-size:.7rem;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.meal-card-pts{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.5rem;color:var(--teal);min-width:36px;text-align:center;}
-.meal-card-pts.zero{color:var(--green);}
-.meal-log-btn{background:var(--teal);color:#fff;border:none;border-radius:99px;padding:8px 14px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.78rem;cursor:pointer;flex-shrink:0;}
-.meal-edit-btn{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:8px 12px;font-size:.72rem;font-weight:700;color:var(--ink2);cursor:pointer;flex-shrink:0;}
-.meal-builder{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
-.mb-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.95rem;margin-bottom:12px;}
-.mb-comp-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);}
-.mb-comp-row:last-child{border-bottom:none;}
-.mb-comp-name{flex:1;font-size:.82rem;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.mb-comp-pts{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;color:var(--teal);min-width:34px;text-align:right;}
-.mb-comp-pts.zero{color:var(--green);}
-.mb-qty{display:flex;align-items:center;gap:4px;}
-.mb-qty button{width:26px;height:26px;border-radius:50%;background:var(--bg);border:1px solid var(--border);cursor:pointer;font-size:.9rem;line-height:1;color:var(--ink);}
-.mb-qty span{font-size:.78rem;font-weight:700;min-width:26px;text-align:center;}
-.mb-total{display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px;font-family:'Nunito',sans-serif;font-weight:800;}
-.mb-total-num{font-size:1.5rem;color:var(--teal);}
-.mb-search-results{max-height:210px;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:6px;}
-.mb-sr-item{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:.8rem;}
-.mb-sr-item:active{background:var(--teal-light);}
-.mb-sr-pts{margin-left:auto;font-family:'Nunito',sans-serif;font-weight:800;color:var(--teal);}
-.mb-sr-pts.zero{color:var(--green);}
-/* Plan toggle */
-.plan-toggle{display:flex;background:var(--bg);border:1.5px solid var(--border);border-radius:99px;overflow:hidden;}
-.plan-toggle button{flex:1;background:none;border:none;padding:9px 8px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.78rem;color:var(--ink2);cursor:pointer;border-radius:99px;transition:all .2s;}
-.plan-toggle button.active{background:var(--teal);color:#fff;}
-/* Review list */
-.review-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:.8rem;}
-.review-item:last-child{border-bottom:none;}
-.review-flag{color:var(--amber);font-size:1rem;flex-shrink:0;}
-
-/* ── SEARCH SCREEN ── */
-.search-content{padding:16px;}
-.search-hero{margin-bottom:14px;}
-
-/* Zero point banner */
-.zero-banner{display:none;background:var(--green-light);border:1.5px solid var(--green);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:.8rem;color:var(--green);font-weight:700;line-height:1.4;}
-.zero-banner.show{display:block;}
-
-/* Search results */
-.search-results{display:flex;flex-direction:column;gap:8px;}
-.search-empty{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;text-align:center;font-size:.82rem;color:var(--ink3);}
-.sri{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-sm);animation:fadeUp .2s ease;}
-.sri-thumb{width:42px;height:42px;object-fit:contain;border-radius:6px;background:var(--bg);flex-shrink:0;}
-.sri-thumb-ph{width:42px;height:42px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;}
-.sri-info{flex:1;min-width:0;}
-.sri-name{font-size:.83rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sri-brand{font-size:.68rem;color:var(--ink2);margin-top:1px;}
-.sri-cal{font-size:.65rem;color:var(--ink3);margin-top:1px;}
-.sri-pts-col{text-align:center;flex-shrink:0;min-width:44px;}
-.sri-pts-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.6rem;line-height:1;color:var(--teal);}
-.sri-pts-num.zero{color:var(--green);}
-.sri-pts-num.med{color:var(--amber);}
-.sri-pts-num.high{color:var(--red);}
-.sri-pts-lbl{font-size:.56rem;color:var(--ink3);font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
-.sri-add{background:var(--teal-light);border:1.5px solid var(--teal-mid);color:var(--teal);border-radius:99px;padding:6px 12px;font-size:.72rem;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:background .15s;}
-.sri-add:hover{background:var(--teal);color:#fff;}
-
-/* ── PROGRESS SCREEN ── */
-.progress-content{padding:16px;}
-.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;box-shadow:var(--shadow-sm);}
-.stat-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:2rem;line-height:1;}
-.stat-lbl{font-size:.7rem;color:var(--ink2);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-top:4px;}
-.week-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
-.wcc-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;margin-bottom:14px;}
-.bar-chart{display:flex;align-items:flex-end;gap:6px;height:80px;}
-.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;}
-.bar-wrap{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;}
-.bar{width:100%;border-radius:6px 6px 0 0;background:var(--teal-mid);transition:height .4s ease;min-height:2px;}
-.bar.today-bar{background:var(--teal);}
-.bar.over-bar{background:var(--red);}
-.bar-day{font-size:.6rem;font-weight:700;color:var(--ink3);}
-.bar-val{font-size:.58rem;font-weight:700;color:var(--ink2);}
-
-.weight-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
-.weight-section-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;}
-.weight-log-input{display:flex;gap:8px;margin-bottom:10px;}
-.weight-list{display:flex;flex-direction:column;gap:6px;}
-.weight-entry{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;padding:6px 0;border-bottom:1px solid var(--border);}
-.weight-entry:last-child{border-bottom:none;}
-
-/* ── SETTINGS SCREEN ── */
-.settings-content{padding:16px;}
-.settings-section-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;color:var(--ink);margin-bottom:10px;margin-top:4px;}
-.settings-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow-sm);}
-.settings-row{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
-.settings-row:last-child{border-bottom:none;}
-.settings-row-icon{font-size:1.1rem;width:28px;text-align:center;flex-shrink:0;}
-.settings-row-info{flex:1;}
-.settings-row-label{font-size:.85rem;font-weight:600;}
-.settings-row-sub{font-size:.7rem;color:var(--ink2);margin-top:2px;}
-.settings-row-val{font-family:'Nunito',sans-serif;font-weight:800;font-size:1.1rem;color:var(--teal);}
-.form-label{display:block;font-size:.75rem;font-weight:700;color:var(--ink2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
-.form-input,.form-select{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:11px 12px;font-family:'DM Sans',sans-serif;font-size:16px;color:var(--ink);outline:none;transition:border-color .2s;-webkit-appearance:none;}
-.form-input:focus,.form-select:focus{border-color:var(--teal);}
+/* ── forms ── */
+.field{margin-bottom:12px;}
+.label{display:block;font-size:.73rem;font-weight:700;color:var(--ink-2);
+  margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;}
+/* 16px minimum: anything smaller makes iOS zoom the page on focus. */
+.input,.select{width:100%;background:var(--surface);border:1.5px solid var(--border-strong);
+  border-radius:var(--r-sm);padding:11px 13px;font-size:16px;color:var(--ink);outline:none;
+  transition:border-color .15s,box-shadow .15s;-webkit-appearance:none;}
+.input:focus,.select:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-50);}
+.input::placeholder{color:var(--ink-3);}
+.input-round{border-radius:99px;padding:11px 16px;}
+.row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.inline-form{display:flex;gap:8px;align-items:center;}
+.inline-form .input{flex:1;min-width:0;}
 .select-wrap{position:relative;}
-.select-wrap::after{content:'▾';position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--ink2);pointer-events:none;}
-.form-row{margin-bottom:12px;}
-.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.big-teal-btn{width:100%;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:13px;font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;margin-top:4px;}
-.budget-result-box{display:none;background:var(--teal-light);border:1.5px solid var(--teal);border-radius:12px;padding:16px;margin-top:12px;text-align:center;}
-.budget-result-box.show{display:block;}
-.brb-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:3rem;color:var(--teal);line-height:1;}
-.brb-lbl{font-size:.8rem;font-weight:700;color:var(--teal);margin-top:4px;}
-.brb-sub{font-size:.72rem;color:var(--ink2);margin-top:8px;line-height:1.6;white-space:pre-line;}
-.apply-btn{margin-top:10px;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:10px 22px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;cursor:pointer;}
+.select-wrap::after{content:'▾';position:absolute;right:13px;top:50%;transform:translateY(-50%);
+  color:var(--ink-2);pointer-events:none;font-size:.85rem;}
+textarea.input{resize:none;min-height:86px;border-radius:var(--r-sm);line-height:1.5;}
 
-/* AI Meal (modal-style sheet) */
-.ai-sheet{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;box-shadow:var(--shadow-sm);}
-.ai-sheet-header{background:var(--teal);padding:14px 16px;color:#fff;}
-.ai-sheet-header h3{font-family:'Nunito',sans-serif;font-weight:900;font-size:1rem;}
-.ai-sheet-header p{font-size:.72rem;opacity:.8;margin-top:2px;}
-.ai-meal-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
-.ai-chip{background:var(--teal-light);border:1px solid var(--teal-mid);border-radius:99px;padding:5px 12px;font-size:.72rem;font-weight:600;color:var(--teal-dark);cursor:pointer;transition:background .15s;}
-.ai-chip:active{background:var(--teal-mid);}
-.ai-textarea{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:11px 13px;font-family:'DM Sans',sans-serif;font-size:16px;color:var(--ink);resize:none;outline:none;min-height:84px;background:var(--bg);transition:border-color .2s;}
-.ai-textarea:focus{border-color:var(--teal);}
-.ai-textarea::placeholder{color:var(--ink3);}
-.ai-result-wrap{display:none;}
-.ai-result-wrap.show{display:block;margin-top:12px;}
-.ai-result-header{background:var(--amber-light);border:1.5px solid #f5c060;border-radius:12px 12px 0 0;padding:14px 16px;display:flex;align-items:center;gap:12px;}
-.ai-result-pts{font-family:'Nunito',sans-serif;font-weight:900;font-size:2.8rem;color:var(--amber);line-height:1;}
-.air-lbl{font-size:.72rem;font-weight:700;color:var(--amber);}
-.air-name{font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;margin-top:2px;}
-.ai-items{background:var(--surface);border:1.5px solid #f5c060;border-top:none;border-radius:0 0 12px 12px;overflow:hidden;}
-.ai-item-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);}
-.ai-item-row:last-child{border-bottom:none;}
-.ai-item-name{flex:1;font-size:.82rem;font-weight:600;}
-.ai-item-cal{font-size:.68rem;color:var(--ink2);margin-top:1px;}
-.ai-item-pts-col{font-family:'Nunito',sans-serif;font-weight:900;font-size:1rem;color:var(--amber);min-width:32px;text-align:right;}
-.ai-add-meal-btn{width:100%;background:var(--amber);color:#fff;border:none;border-radius:99px;padding:12px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.88rem;cursor:pointer;margin-top:10px;}
-.ai-disclaimer{font-size:.68rem;color:var(--ink3);text-align:center;margin-top:6px;font-style:italic;}
-.ai-loading{display:none;padding:24px;text-align:center;}
-.ai-loading.show{display:block;}
-.ai-loading-icon{font-size:2rem;animation:spin2 1.2s ease-in-out infinite;}
-@keyframes spin2{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
-.ai-loading-txt{font-size:.78rem;color:var(--ink2);margin-top:8px;}
+/* ── settings rows ── */
+.srow{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
+.srow:last-child{border-bottom:none;}
+.srow-ico{font-size:1.05rem;width:26px;text-align:center;flex-shrink:0;}
+.srow-body{flex:1;min-width:0;}
+.srow-l{font-size:.87rem;font-weight:600;}
+.srow-s{font-size:.73rem;color:var(--ink-3);margin-top:2px;line-height:1.4;}
+.srow-v{font-family:var(--num);font-weight:700;font-size:1.05rem;color:var(--brand);}
+.toggle{display:flex;background:var(--surface-2);border:1.5px solid var(--border);
+  border-radius:99px;padding:3px;gap:3px;}
+.toggle button{flex:1;background:none;border:none;padding:9px 8px;font-weight:650;font-size:.81rem;
+  color:var(--ink-2);border-radius:99px;transition:all .18s;}
+.toggle button.active{background:var(--brand);color:#fff;box-shadow:var(--sh-sm);}
 
-/* ── EDIT ENTRY SHEET ── */
-.edit-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-end;justify-content:center;}
-.edit-overlay.show{display:flex;}
-.edit-sheet{background:var(--surface);border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));width:100%;max-width:520px;}
-.edit-sheet-name{font-family:'Nunito',sans-serif;font-weight:900;font-size:1rem;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.edit-sheet-sub{font-size:.73rem;color:var(--ink2);margin-bottom:18px;}
-.edit-qty-row{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:10px;}
-.edit-qty-btn{width:46px;height:46px;border-radius:50%;background:var(--teal-light);border:1.5px solid var(--teal);color:var(--teal);font-size:1.5rem;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;-webkit-tap-highlight-color:transparent;}
-.edit-qty-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:2.8rem;min-width:64px;text-align:center;}
-.edit-pts-preview{text-align:center;font-size:.78rem;color:var(--ink2);margin-bottom:18px;min-height:18px;}
-.edit-pts-preview strong{color:var(--teal);font-family:'Nunito',sans-serif;font-weight:900;}
-.edit-actions{display:flex;gap:10px;}
-.edit-save-btn{flex:1;background:var(--teal);color:#fff;border:none;border-radius:99px;padding:13px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;}
-.edit-del-btn{background:var(--red-light);border:1.5px solid var(--red);color:var(--red);border-radius:99px;padding:13px 18px;font-family:'Nunito',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;}
+/* ── SCANNER ── */
+.cam-card{background:#0d1113;border-radius:var(--r-xl);overflow:hidden;margin-bottom:12px;
+  box-shadow:var(--sh);position:relative;}
+#video-wrap{position:relative;width:100%;aspect-ratio:3/4;background:#0d1113;display:none;}
+#video-wrap.active{display:block;}
+#scanner-video{width:100%;height:100%;object-fit:cover;display:block;}
+.reticle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.reticle-box{width:78%;aspect-ratio:1.6/1;position:relative;
+  box-shadow:0 0 0 9999px rgba(6,10,12,.55);border-radius:14px;}
+.reticle-box i{position:absolute;width:26px;height:26px;border:3px solid #fff;opacity:.95;}
+.reticle-box i:nth-child(1){top:-2px;left:-2px;border-right:0;border-bottom:0;border-radius:12px 0 0 0;}
+.reticle-box i:nth-child(2){top:-2px;right:-2px;border-left:0;border-bottom:0;border-radius:0 12px 0 0;}
+.reticle-box i:nth-child(3){bottom:-2px;left:-2px;border-right:0;border-top:0;border-radius:0 0 0 12px;}
+.reticle-box i:nth-child(4){bottom:-2px;right:-2px;border-left:0;border-top:0;border-radius:0 0 12px 0;}
+.reticle-line{position:absolute;left:8px;right:8px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,#4fe3d3,transparent);animation:sweep 2s ease-in-out infinite;}
+@keyframes sweep{0%,100%{top:12%;opacity:.35}50%{top:86%;opacity:1}}
+.cam-hint{position:absolute;left:0;right:0;bottom:0;padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(transparent,rgba(6,10,12,.8));color:#fff;font-size:.79rem;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.cam-idle{padding:34px 22px;display:flex;flex-direction:column;align-items:center;gap:13px;text-align:center;color:#fff;}
+.cam-idle-ico{font-size:2.6rem;opacity:.92;}
+.cam-idle-t{font-size:.94rem;font-weight:650;}
+.cam-idle-s{font-size:.79rem;color:#a8b3b7;line-height:1.5;max-width:250px;}
+.cam-round{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.16);
+  border:none;color:#fff;font-size:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.cam-round.on{background:#ffd36e;color:#2a2000;}
+.link-sm{display:block;text-align:center;font-size:.78rem;color:var(--brand);
+  font-weight:600;padding:8px;margin-bottom:12px;}
 
-/* ── PREP / ADD-INS SHEET ── */
-.prep-plain-row{display:flex;align-items:center;gap:10px;background:var(--green-light);border:1.5px solid var(--green);border-radius:12px;padding:12px 14px;cursor:pointer;}
-.prep-addin-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);}
-.prep-addin-row:last-child{border-bottom:none;}
-.prep-addin-info{flex:1;min-width:0;}
-.prep-addin-name{font-size:.82rem;font-weight:600;}
-.prep-addin-serv{font-size:.66rem;color:var(--ink3);margin-top:1px;}
-.prep-addin-pts{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;color:var(--teal);min-width:32px;text-align:right;}
-#prep-addins{max-height:230px;overflow-y:auto;}
+/* photo fallback */
+.photo-preview{display:none;flex-direction:column;gap:10px;padding:12px;}
+.photo-preview.show{display:flex;}
+#barcode-preview{width:100%;max-height:220px;object-fit:contain;border-radius:var(--r-sm);background:#0d1113;}
+#barcode-file-input{display:none;}
 
-/* ── RECENT FOODS ── */
-.recents-wrap{margin-bottom:14px;}
-.recents-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;color:var(--ink);margin-bottom:8px;}
-.recents-list{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-.recents-list::-webkit-scrollbar{display:none;}
-.recent-chip{display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:99px;padding:7px 12px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;transition:background .15s;box-shadow:var(--shadow-sm);}
-.recent-chip:active{background:var(--teal-light);}
-.recent-chip-icon{font-size:.85rem;}
-.recent-chip-name{font-size:.72rem;font-weight:600;color:var(--ink);}
-.recent-chip-pts{font-family:'Nunito',sans-serif;font-weight:800;font-size:.68rem;color:var(--teal);margin-left:2px;}
+/* ── product result ── */
+.prod{display:none;}
+.prod.show{display:block;}
+.prod-head{display:flex;gap:12px;padding:14px 16px;align-items:center;border-bottom:1px solid var(--border);}
+.prod-img{width:52px;height:52px;object-fit:contain;border-radius:var(--r-xs);background:var(--surface-2);flex-shrink:0;}
+.prod-ph{width:52px;height:52px;border-radius:var(--r-xs);background:var(--surface-2);
+  display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;}
+.prod-name{font-family:var(--num);font-weight:650;font-size:.98rem;line-height:1.25;letter-spacing:-.01em;}
+.prod-brand{font-size:.74rem;color:var(--ink-3);margin-top:2px;}
+.prod-pts{display:flex;align-items:center;gap:15px;padding:16px;border-bottom:1px solid var(--border);}
+.prod-pts-n{font-family:var(--num);font-weight:700;font-size:3rem;line-height:.9;
+  letter-spacing:-.04em;color:var(--brand);font-variant-numeric:tabular-nums;}
+.prod-pts-n.zero{color:var(--green);}
+.prod-pts-n.med{color:var(--amber);}
+.prod-pts-n.high{color:var(--red);}
+.prod-pts-body{flex:1;min-width:0;}
+.prod-pts-l{font-size:.78rem;font-weight:650;color:var(--ink-2);}
+.prod-serv{font-size:.74rem;color:var(--ink-3);margin-top:2px;}
+.note{border-radius:var(--r-xs);padding:7px 10px;font-size:.72rem;font-weight:600;margin-top:7px;line-height:1.45;}
+.note-green{background:var(--green-50);color:var(--green);}
+.note-grey{background:var(--surface-2);color:var(--ink-2);font-weight:500;}
+.nutr{display:flex;border-bottom:1px solid var(--border);}
+.nutr-c{flex:1;text-align:center;padding:11px 3px;border-right:1px solid var(--border);}
+.nutr-c:last-child{border-right:none;}
+.nutr-v{font-family:var(--num);font-weight:650;font-size:.92rem;font-variant-numeric:tabular-nums;}
+.nutr-k{font-size:.58rem;color:var(--ink-3);margin-top:2px;text-transform:uppercase;letter-spacing:.05em;}
+.prod-add{display:flex;align-items:center;gap:10px;padding:13px 16px;}
+.stepper{display:flex;align-items:center;background:var(--surface-2);border:1.5px solid var(--border);
+  border-radius:99px;overflow:hidden;flex-shrink:0;}
+.stepper button{background:none;border:none;color:var(--ink);font-size:1.1rem;padding:10px 15px;line-height:1;}
+.stepper span{font-family:var(--num);font-weight:700;font-size:.94rem;min-width:24px;text-align:center;}
 
-/* log items are tappable */
-.log-item{cursor:pointer;}
+/* ── search ── */
+.sri{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:11px 12px;display:flex;align-items:center;gap:11px;box-shadow:var(--sh-sm);margin-bottom:8px;}
+.sri-thumb{width:38px;height:38px;object-fit:contain;border-radius:var(--r-xs);background:var(--surface-2);flex-shrink:0;}
+.sri-ph{width:38px;height:38px;border-radius:var(--r-xs);background:var(--surface-2);
+  display:flex;align-items:center;justify-content:center;font-size:1.05rem;flex-shrink:0;}
+.sri-body{flex:1;min-width:0;}
+.sri-name{font-size:.86rem;font-weight:600;letter-spacing:-.01em;line-height:1.3;}
+.sri-sub{font-size:.7rem;color:var(--ink-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sri-pts{text-align:center;flex-shrink:0;min-width:36px;}
+.sri-pts-n{font-family:var(--num);font-weight:700;font-size:1.32rem;line-height:1;
+  color:var(--brand);font-variant-numeric:tabular-nums;}
+.sri-pts-n.zero{color:var(--green);}
+.sri-pts-n.med{color:var(--amber);}
+.sri-pts-n.high{color:var(--red);}
+.sri-pts-l{font-size:.55rem;color:var(--ink-3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
+.sri-add{background:var(--brand-50);border:1px solid var(--brand-100);color:var(--brand-700);
+  border-radius:50%;width:34px;height:34px;font-size:1.15rem;font-weight:600;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;line-height:1;}
+.sri-add:active{background:var(--brand);color:#fff;}
+.banner{display:none;border-radius:var(--r);padding:11px 13px;margin-bottom:12px;
+  font-size:.79rem;font-weight:600;line-height:1.45;}
+.banner.show{display:block;}
+.banner-green{background:var(--green-50);border:1px solid #bfe6cd;color:var(--green);}
+.banner-blue{background:var(--brand-50);border:1px solid var(--brand-100);color:var(--brand-700);}
+.searching{display:flex;align-items:center;gap:9px;font-size:.8rem;color:var(--ink-3);padding:14px 2px;}
 
-/* ── TOAST ── */
-#toast{position:fixed;bottom:calc(var(--nav-h) + 14px);left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--ink);color:#fff;border-radius:99px;padding:10px 22px;font-size:.8rem;font-weight:600;z-index:999;transition:all .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;}
+/* ── meals ── */
+.meal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:12px;margin-bottom:10px;box-shadow:var(--sh-sm);display:flex;align-items:center;gap:10px;}
+.meal-ico{font-size:1.45rem;flex-shrink:0;width:28px;text-align:center;}
+.meal-body{flex:1;min-width:0;}
+.meal-name{font-family:var(--num);font-weight:650;font-size:.93rem;letter-spacing:-.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.meal-sub{font-size:.71rem;color:var(--ink-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.meal-pts{font-family:var(--num);font-weight:700;font-size:1.3rem;color:var(--brand);
+  min-width:24px;text-align:center;font-variant-numeric:tabular-nums;flex-shrink:0;}
+.meal-pts.zero{color:var(--green);}
+.meal-actions{display:flex;gap:6px;flex-shrink:0;align-items:center;}
+.btn-icon{width:34px;height:34px;padding:0;border-radius:50%;font-size:.85rem;}
+.comp-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--border);}
+.comp-row:last-of-type{border-bottom:none;}
+.comp-name{flex:1;min-width:0;font-size:.83rem;font-weight:600;}
+.comp-serv{font-size:.68rem;color:var(--ink-3);font-weight:400;margin-top:1px;}
+.comp-pts{font-family:var(--num);font-weight:650;font-size:.85rem;min-width:30px;text-align:right;
+  color:var(--brand);font-variant-numeric:tabular-nums;}
+.comp-pts.zero{color:var(--green);}
+.mini-step{display:flex;align-items:center;gap:2px;}
+.mini-step button{width:26px;height:26px;border-radius:50%;background:var(--surface-2);
+  border:1px solid var(--border);font-size:.9rem;line-height:1;color:var(--ink);}
+.mini-step span{font-size:.77rem;font-weight:650;min-width:26px;text-align:center;font-variant-numeric:tabular-nums;}
+.total-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px;
+  font-weight:650;font-size:.9rem;}
+.total-n{font-family:var(--num);font-size:1.4rem;color:var(--brand);}
+.picker{max-height:210px;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:6px;
+  -webkit-overflow-scrolling:touch;}
+.picker-item{display:flex;align-items:center;gap:9px;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 11px;font-size:.82rem;}
+.picker-item:active{background:var(--brand-50);}
+.picker-pts{margin-left:auto;font-family:var(--num);font-weight:700;color:var(--brand);font-size:.85rem;}
+.picker-pts.zero{color:var(--green);}
+
+/* ── AI meal ── */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:11px;}
+.ai-head{background:var(--amber-50);border:1px solid #f0d9b5;border-radius:var(--r) var(--r) 0 0;
+  padding:14px 16px;display:flex;align-items:center;gap:13px;}
+.ai-pts{font-family:var(--num);font-weight:700;font-size:2.5rem;color:var(--amber);line-height:.9;}
+.ai-list{background:var(--surface);border:1px solid #f0d9b5;border-top:none;
+  border-radius:0 0 var(--r) var(--r);overflow:hidden;}
+.ai-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);}
+.ai-row:last-child{border-bottom:none;}
+.ai-name{font-size:.83rem;font-weight:600;}
+.ai-sub{font-size:.69rem;color:var(--ink-3);margin-top:1px;}
+.ai-row-pts{font-family:var(--num);font-weight:700;font-size:.95rem;color:var(--amber);
+  min-width:30px;text-align:right;}
+.loading{display:none;padding:28px;text-align:center;}
+.loading.show{display:block;}
+.loading-ico{font-size:1.9rem;animation:pulse 1.3s ease-in-out infinite;}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.75}50%{transform:scale(1.12);opacity:1}}
+.result{display:none;}
+.result.show{display:block;}
+.disclaimer{font-size:.7rem;color:var(--ink-3);text-align:center;margin-top:8px;line-height:1.45;}
+
+/* ── progress ── */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:15px 12px;text-align:center;box-shadow:var(--sh-sm);}
+.stat-n{font-family:var(--num);font-weight:700;font-size:1.75rem;line-height:1;
+  letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+.stat-l{font-size:.68rem;color:var(--ink-3);font-weight:600;text-transform:uppercase;
+  letter-spacing:.05em;margin-top:5px;}
+.chart{display:flex;align-items:flex-end;gap:6px;height:104px;}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;}
+.bar-wrap{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;position:relative;}
+.bar{width:100%;max-width:26px;border-radius:6px 6px 2px 2px;background:var(--brand-200);
+  transition:height .4s ease;min-height:3px;}
+.bar.today{background:var(--brand);}
+.bar.over{background:var(--amber);}
+.bar-budget{position:absolute;left:0;right:0;border-top:1.5px dashed var(--border-strong);}
+.bar-v{font-size:.6rem;font-weight:650;color:var(--ink-2);font-variant-numeric:tabular-nums;min-height:13px;}
+.bar-d{font-size:.62rem;font-weight:600;color:var(--ink-3);}
+.wentry{display:flex;justify-content:space-between;align-items:center;font-size:.84rem;
+  padding:9px 0;border-bottom:1px solid var(--border);}
+.wentry:last-child{border-bottom:none;}
+
+/* ── review list ── */
+.review-item{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-bottom:1px solid var(--border);font-size:.81rem;}
+.review-item:last-of-type{border-bottom:none;}
+
+/* ── bottom nav ── */
+.nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.94);
+  backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);
+  border-top:1px solid var(--border);display:flex;z-index:100;
+  padding-bottom:env(safe-area-inset-bottom);}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:52px;padding:8px 0 6px;color:var(--ink-3);transition:color .15s;gap:3px;
+  background:none;border:none;}
+.nav-item.active{color:var(--brand);}
+.nav-ico{font-size:1.22rem;line-height:1;transition:transform .18s;}
+.nav-item.active .nav-ico{transform:translateY(-1px) scale(1.06);}
+.nav-lbl{font-size:.62rem;font-weight:650;letter-spacing:.01em;}
+
+/* ── sheets ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(16,24,40,.45);z-index:200;
+  align-items:flex-end;justify-content:center;backdrop-filter:blur(2px);}
+.overlay.show{display:flex;animation:fade .18s ease;}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{background:var(--surface);border-radius:var(--r-xl) var(--r-xl) 0 0;
+  padding:8px 18px calc(20px + env(safe-area-inset-bottom));width:100%;max-width:520px;
+  box-shadow:var(--sh-up);animation:slideUp .24s cubic-bezier(.32,.72,0,1);
+  max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
+.sheet-grip{width:36px;height:4px;border-radius:99px;background:var(--border-strong);
+  margin:0 auto 14px;}
+.sheet-title{font-family:var(--num);font-weight:700;font-size:1.05rem;letter-spacing:-.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sheet-sub{font-size:.77rem;color:var(--ink-3);margin-top:2px;margin-bottom:16px;}
+.big-step{display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:8px;}
+.big-step button{width:48px;height:48px;border-radius:50%;background:var(--brand-50);
+  border:1.5px solid var(--brand-100);color:var(--brand);font-size:1.4rem;line-height:1;
+  display:flex;align-items:center;justify-content:center;font-weight:600;}
+.big-step span{font-family:var(--num);font-weight:700;font-size:2.5rem;min-width:62px;
+  text-align:center;font-variant-numeric:tabular-nums;}
+.step-preview{text-align:center;font-size:.8rem;color:var(--ink-2);margin-bottom:18px;min-height:19px;}
+.step-preview b{color:var(--brand);font-family:var(--num);font-size:1.02rem;}
+.sheet-actions{display:flex;gap:9px;}
+.plain-row{display:flex;align-items:center;gap:11px;background:var(--green-50);
+  border:1.5px solid #bfe6cd;border-radius:var(--r);padding:12px 14px;}
+.addin-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);}
+.addin-row:last-child{border-bottom:none;}
+.addin-body{flex:1;min-width:0;}
+.addin-n{font-size:.83rem;font-weight:600;}
+.addin-s{font-size:.67rem;color:var(--ink-3);margin-top:1px;}
+.addin-pts{font-family:var(--num);font-weight:650;font-size:.85rem;color:var(--brand);
+  min-width:28px;text-align:right;}
+#prep-addins{max-height:236px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+
+/* ── misc ── */
+.recents{display:flex;gap:7px;overflow-x:auto;padding:1px 0 3px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.recents::-webkit-scrollbar{display:none;}
+.recent-chip{display:flex;align-items:center;gap:6px;background:var(--surface);
+  border:1px solid var(--border);border-radius:99px;padding:7px 12px;flex-shrink:0;
+  box-shadow:var(--sh-sm);}
+.recent-chip:active{background:var(--brand-50);}
+.recent-n{font-size:.74rem;font-weight:600;color:var(--ink);white-space:nowrap;}
+.recent-p{font-family:var(--num);font-weight:700;font-size:.7rem;color:var(--brand);}
+#toast{position:fixed;bottom:calc(var(--nav-h) + 14px);left:50%;
+  transform:translateX(-50%) translateY(18px);opacity:0;background:#14181b;color:#fff;
+  border-radius:99px;padding:11px 20px;font-size:.81rem;font-weight:600;z-index:999;
+  transition:all .26s cubic-bezier(.34,1.4,.64,1);max-width:calc(100% - 32px);
+  text-align:center;pointer-events:none;box-shadow:var(--sh-lg);}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-#toast.ok{background:var(--teal);}
+#toast.ok{background:var(--brand);}
 #toast.err{background:var(--red);}
-.spin-sm{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spinSm .6s linear infinite;vertical-align:middle;margin-right:5px;}
-@keyframes spinSm{to{transform:rotate(360deg)}}
+.spin-sm{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.3);
+  border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;
+  vertical-align:-2px;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+pre.diag{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:12px;margin-top:10px;font-size:.68rem;line-height:1.6;white-space:pre-wrap;
+  word-break:break-word;font-family:ui-monospace,Menlo,monospace;color:var(--ink);}
+.version{text-align:center;font-size:.68rem;color:var(--ink-3);padding:14px 0 4px;}
 </style>
 </head>
 <body>
-
 <!-- ══════════ MY DAY ══════════ -->
 <div class="screen active" id="screen-day">
-  <div class="page-header">
-    <h2>My Day</h2>
-    <p id="day-header-date">Loading…</p>
+  <div class="app-header">
+    <div class="header-main">
+      <h2>Today</h2>
+      <p id="day-header-date">—</p>
+    </div>
+    <button class="icon-btn" onclick="switchScreen('settings')" aria-label="Settings">⚙️</button>
   </div>
-  <div class="day-content">
+  <div class="content">
 
-    <!-- Points hero -->
-    <div class="points-hero" id="points-hero">
-      <div class="hero-date" id="hero-date">Today</div>
-      <div class="hero-row">
-        <div class="hero-block">
-          <div class="hero-num" id="hero-used">0</div>
-          <div class="hero-lbl">Used</div>
-        </div>
-        <div class="hero-block">
-          <div class="hero-num zero" id="hero-remain">23</div>
-          <div class="hero-lbl">Remaining</div>
-          <div class="hero-sub">of <span id="hero-budget">23</span> daily</div>
-        </div>
-        <div class="hero-block">
-          <div class="hero-num" id="hero-weeklies">28</div>
-          <div class="hero-lbl">Weeklies</div>
-          <div class="hero-sub">left this week</div>
-        </div>
+    <div class="hero">
+      <div class="hero-top"><span id="hero-label">Points left</span><span id="hero-date">—</span></div>
+      <div class="hero-main">
+        <div class="hero-big" id="hero-remain">0</div>
+        <div class="hero-unit" id="hero-unit">of <span id="hero-budget">23</span> today</div>
       </div>
-      <div class="prog-bar-wrap">
-        <div class="prog-bar-track"><div class="prog-bar-fill" id="prog-bar" style="width:0%"></div></div>
-        <div class="prog-bar-labels"><span>0</span><span id="prog-bar-max">23</span></div>
+      <div class="hero-bar">
+        <div class="hero-track"><div class="hero-fill" id="prog-bar" style="width:0%"></div></div>
+        <div class="hero-legend"><span id="hero-used-lbl">0 used</span><span id="prog-bar-max">23</span></div>
+      </div>
+      <div class="hero-chips">
+        <div class="hero-chip"><div class="hero-chip-n" id="hero-used">0</div><div class="hero-chip-l">Used today</div></div>
+        <div class="hero-chip"><div class="hero-chip-n" id="hero-weeklies">28</div><div class="hero-chip-l">Weeklies left</div></div>
+        <div class="hero-chip"><div class="hero-chip-n" id="hero-week-total">0</div><div class="hero-chip-l">This week</div></div>
       </div>
     </div>
 
-    <!-- Weekly strip -->
-    <div class="weekly-strip">
-      <div class="weekly-strip-title">
-        <span>This Week</span>
-        <span id="weekly-strip-pts" style="font-size:.75rem;color:var(--teal)"></span>
-      </div>
-      <div class="weekly-days" id="weekly-days"></div>
-    </div>
-
-    <!-- Recent foods -->
-    <div class="recents-wrap" id="recents-wrap" style="display:none">
-      <div class="recents-title">Recently Logged</div>
-      <div class="recents-list" id="recents-list"></div>
-    </div>
-
-    <!-- Quick add -->
-    <div class="quick-add-bar">
-      <div class="qa-btn" onclick="switchScreen('scan')">
-        <div class="qa-btn-icon">📷</div>
-        <div class="qa-btn-lbl">Scan</div>
-      </div>
-      <div class="qa-btn" onclick="switchScreen('search')">
-        <div class="qa-btn-icon">🔎</div>
-        <div class="qa-btn-lbl">Search</div>
-      </div>
-      <div class="qa-btn" onclick="switchScreen('ai')">
-        <div class="qa-btn-icon">✨</div>
-        <div class="qa-btn-lbl">AI Meal</div>
-      </div>
-      <div class="qa-btn" onclick="switchScreen('meals')">
-        <div class="qa-btn-icon">🍱</div>
-        <div class="qa-btn-lbl">Meals</div>
+    <div class="card">
+      <div class="card-pad">
+        <div class="card-title">This week<span style="font-size:.74rem;font-weight:600;color:var(--ink-3)" id="weekly-strip-pts"></span></div>
+        <div class="week-strip" id="weekly-days"></div>
       </div>
     </div>
 
-    <!-- Log -->
-    <div class="log-section-title">
-      Today's Food
-      <span onclick="resetDay()">Reset day</span>
+    <div class="recents-wrap" id="recents-wrap" style="display:none;margin-bottom:14px;">
+      <div class="section-label" style="margin-top:4px">Recently logged</div>
+      <div class="recents" id="recents-list"></div>
     </div>
-    <div id="log-list"><div class="log-empty">Nothing logged yet.<br>Tap Scan, Search, or AI Meal to add food.</div></div>
+
+    <div class="quick">
+      <button class="quick-btn" onclick="switchScreen('scan')"><div class="quick-ico">📷</div><div class="quick-lbl">Scan</div></button>
+      <button class="quick-btn" onclick="switchScreen('search')"><div class="quick-ico">🔍</div><div class="quick-lbl">Search</div></button>
+      <button class="quick-btn" onclick="switchScreen('meals')"><div class="quick-ico">🍱</div><div class="quick-lbl">Meals</div></button>
+      <button class="quick-btn" onclick="switchScreen('ai')"><div class="quick-ico">✨</div><div class="quick-lbl">Describe</div></button>
+    </div>
+
+    <div class="card-title" style="margin:2px 2px 9px">
+      Today's food
+      <button class="btn btn-sm btn-ghost" onclick="resetDay()" style="padding:6px 12px;font-size:.74rem">Clear</button>
+    </div>
+    <div id="log-list"></div>
 
   </div>
 </div>
 
 <!-- ══════════ SCAN ══════════ -->
 <div class="screen" id="screen-scan">
-  <div class="page-header"><h2>Scan Barcode</h2><p id="scan-subtitle">Loading…</p></div>
-  <div class="scan-content">
+  <div class="app-header">
+    <div class="header-main"><h2>Scan</h2><p id="scan-subtitle">Point your camera at the barcode</p></div>
+  </div>
+  <div class="content">
 
-    <!-- Live camera scanner — used on BOTH iPhone and Android -->
     <div id="live-scanner">
-      <div class="live-scanner-card">
-        <div id="video-wrap"><video id="scanner-video" autoplay muted playsinline webkit-playsinline></video><div class="scan-overlay"><div class="scan-frame"><div class="scan-line"></div></div></div></div>
-        <div class="scanner-idle-inner" id="scanner-idle">
-          <div style="font-size:2.2rem">🔍</div>
-          <div style="font-size:.82rem;color:var(--ink2);text-align:center">Point your camera at the barcode</div>
-          <button class="scan-start-btn" onclick="startScanner()">Open Camera</button>
-        </div>
-        <div class="scan-status-bar" id="scan-status-bar">
-          <span style="font-size:.78rem;color:var(--ink2)" id="scan-status-txt">Hold steady over barcode…</span>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button id="torch-btn" onclick="toggleTorch()" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.72rem;font-weight:700;color:var(--ink);cursor:pointer;">🔦 Torch</button>
-            <button class="scan-stop-btn" onclick="stopScanner()">Stop</button>
+      <div class="cam-card">
+        <div id="video-wrap">
+          <video id="scanner-video" autoplay muted playsinline webkit-playsinline></video>
+          <div class="reticle"><div class="reticle-box"><i></i><i></i><i></i><i></i><div class="reticle-line"></div></div></div>
+          <div class="cam-hint">
+            <span id="scan-status-txt">Hold steady over the barcode</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="cam-round" id="torch-btn" onclick="toggleTorch()" style="display:none" aria-label="Torch">🔦</button>
+              <button class="cam-round" onclick="stopScanner()" aria-label="Stop">✕</button>
+            </div>
           </div>
         </div>
+        <div class="cam-idle" id="scanner-idle">
+          <div class="cam-idle-ico">📷</div>
+          <div class="cam-idle-t">Ready to scan</div>
+          <div class="cam-idle-s">Point your camera at any barcode — it reads automatically.</div>
+          <button class="btn btn-primary" onclick="startScanner()">Open camera</button>
+        </div>
       </div>
-      <div style="text-align:center;margin-bottom:14px;">
-        <span onclick="showPhotoFallback()" style="font-size:.75rem;color:var(--teal);font-weight:700;cursor:pointer;text-decoration:underline;">Camera trouble? Snap a photo instead</span>
-      </div>
+      <span class="link-sm" onclick="showPhotoFallback()">Camera trouble? Snap a photo instead</span>
     </div>
 
-    <!-- Fallback: photo capture (older iOS, in-app browsers, camera blocked) -->
     <div id="photo-scanner" style="display:none">
-      <div class="capture-card">
-        <div class="capture-idle" id="capture-idle">
-          <div class="capture-idle-icon">📸</div>
-          <div class="capture-idle-txt" id="capture-idle-txt">Tap below to open your camera.<br>Snap a photo of the barcode — it reads automatically.</div>
+      <div class="cam-card">
+        <div class="cam-idle" id="capture-idle">
+          <div class="cam-idle-ico">📸</div>
+          <div class="cam-idle-t">Photo mode</div>
+          <div class="cam-idle-s" id="capture-idle-txt">Take a photo of the barcode — it reads automatically.</div>
           <input type="file" id="barcode-file-input" accept="image/*" capture="environment" onchange="onPhotoSelected(event)"/>
-          <label for="barcode-file-input" class="capture-btn">📷 Take Photo</label>
+          <label for="barcode-file-input" class="btn btn-primary">Take photo</label>
         </div>
         <div class="photo-preview" id="photo-preview">
-          <img id="barcode-preview" src="" alt="barcode"/>
-          <div class="preview-btns">
-            <button class="decode-btn" id="decode-btn" onclick="decodePhoto()">🔍 Read Again</button>
-            <button class="retake-btn" onclick="retakePhoto()">↩ Retake</button>
+          <img id="barcode-preview" src="" alt="Captured barcode"/>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" style="flex:1" id="decode-btn" onclick="decodePhoto()">Read again</button>
+            <button class="btn btn-ghost" onclick="retakePhoto()">Retake</button>
           </div>
         </div>
       </div>
-      <div style="text-align:center;margin-bottom:14px;">
-        <span onclick="showLiveScanner()" style="font-size:.75rem;color:var(--teal);font-weight:700;cursor:pointer;text-decoration:underline;">↩ Back to live scanner</span>
-      </div>
+      <span class="link-sm" onclick="showLiveScanner()">← Back to live scanner</span>
     </div>
 
-    <div style="margin-bottom:10px;font-size:.8rem;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em;">Or Enter Barcode</div>
-    <div class="input-row" style="margin-bottom:14px;">
-      <input class="txt-input" id="manual-barcode" type="tel" placeholder="e.g. 049000028911"/>
-      <button class="teal-btn" onclick="lookupManual()">Look Up</button>
+    <div class="section-label" style="margin-top:6px">Or enter the number</div>
+    <div class="inline-form" style="margin-bottom:14px;">
+      <input class="input input-round" id="manual-barcode" type="tel" inputmode="numeric" placeholder="e.g. 049000028911"/>
+      <button class="btn btn-primary btn-sm" onclick="lookupManual()">Look up</button>
     </div>
 
-    <div class="prod-result" id="prod-result">
-      <div class="prod-card">
-        <div class="prod-top">
-          <div id="prod-img-wrap"><div class="prod-img-ph">🛒</div></div>
-          <div><div class="prod-name" id="prod-name">—</div><div class="prod-brand" id="prod-brand"></div></div>
+    <div class="prod" id="prod-result">
+      <div class="card" style="margin-bottom:0">
+        <div class="prod-head">
+          <div id="prod-img-wrap"><div class="prod-ph">🛒</div></div>
+          <div style="min-width:0"><div class="prod-name" id="prod-name">—</div><div class="prod-brand" id="prod-brand"></div></div>
         </div>
-        <div class="prod-pts-row">
-          <div class="prod-pts-num" id="pts-display">—</div>
-          <div class="prod-pts-info">
-            <div class="prod-pts-lbl" id="pts-lbl">WW Points</div>
+        <div class="prod-pts">
+          <div class="prod-pts-n" id="pts-display">—</div>
+          <div class="prod-pts-body">
+            <div class="prod-pts-l" id="pts-lbl">WW Points</div>
             <div class="prod-serv" id="serv-size">—</div>
-            <div class="prod-zero-msg" id="zero-msg" style="display:none">✅ Zero-point food!</div>
+            <div class="note note-green" id="zero-msg" style="display:none"></div>
           </div>
         </div>
-        <div class="nutr-row">
-          <div class="nutr-cell"><div class="nutr-val" id="n-cal">—</div><div class="nutr-key">Cal</div></div>
-          <div class="nutr-cell"><div class="nutr-val" id="n-sat">—</div><div class="nutr-key">Sat Fat</div></div>
-          <div class="nutr-cell"><div class="nutr-val" id="n-sug">—</div><div class="nutr-key">Sugar</div></div>
-          <div class="nutr-cell"><div class="nutr-val" style="color:var(--teal)" id="n-pro">—</div><div class="nutr-key">Protein</div></div>
-          <div class="nutr-cell"><div class="nutr-val" style="color:var(--teal)" id="n-fib">—</div><div class="nutr-key">Fiber</div></div>
+        <div class="nutr">
+          <div class="nutr-c"><div class="nutr-v" id="n-cal">—</div><div class="nutr-k">Cal</div></div>
+          <div class="nutr-c"><div class="nutr-v" id="n-sat">—</div><div class="nutr-k">Sat fat</div></div>
+          <div class="nutr-c"><div class="nutr-v" id="n-sug">—</div><div class="nutr-k">Sugar</div></div>
+          <div class="nutr-c"><div class="nutr-v" style="color:var(--brand)" id="n-pro">—</div><div class="nutr-k">Protein</div></div>
+          <div class="nutr-c"><div class="nutr-v" style="color:var(--brand)" id="n-fib">—</div><div class="nutr-k">Fiber</div></div>
         </div>
-        <div class="add-food-row">
-          <div class="qty-ctrl">
-            <button class="qty-btn" onclick="changeQty(-1)">−</button>
-            <span class="qty-num" id="qty-display">1</span>
-            <button class="qty-btn" onclick="changeQty(1)">+</button>
+        <div class="prod-add">
+          <div class="stepper">
+            <button onclick="changeQty(-1)" aria-label="Fewer">−</button>
+            <span id="qty-display">1</span>
+            <button onclick="changeQty(1)" aria-label="More">+</button>
           </div>
-          <button class="add-log-btn" onclick="addScanToLog()">Add to Today's Log</button>
+          <button class="btn btn-primary" style="flex:1" onclick="addScanToLog()">Add to today</button>
         </div>
       </div>
     </div>
@@ -569,128 +622,128 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 
 <!-- ══════════ SEARCH ══════════ -->
 <div class="screen" id="screen-search">
-  <div class="page-header"><h2>Search Foods</h2><p>Find WW points for any food</p></div>
-  <div class="search-content">
-    <div class="input-row search-hero">
-      <input class="txt-input" id="food-search-input" type="text" placeholder="potato, banana, Greek yogurt…" autocomplete="off"/>
-      <button class="teal-btn" id="search-btn" onclick="searchFood()">Search</button>
+  <div class="app-header"><div class="header-main"><h2>Search</h2><p>Find the Points for any food</p></div></div>
+  <div class="content">
+    <div class="inline-form" style="margin-bottom:12px;">
+      <input class="input input-round" id="food-search-input" type="search" placeholder="chicken breast, banana, pizza…" autocomplete="off" enterkeyhint="search"/>
+      <button class="btn btn-primary btn-sm" id="search-btn" onclick="searchFood()">Search</button>
     </div>
-    <div class="zero-banner" id="zero-banner"></div>
-    <div id="search-results"><div class="search-empty">Search any food to see its WW points 🥦</div></div>
-  </div>
-</div>
-
-<!-- ══════════ AI MEAL ══════════ -->
-<div class="screen" id="screen-ai">
-  <div class="page-header"><h2>AI Meal Estimator</h2><p>Describe a meal in plain words</p></div>
-  <div style="padding:16px;">
-    <div class="ai-sheet">
-      <div class="ai-sheet-header">
-        <h3>✨ What did you eat?</h3>
-        <p>Type naturally — quantities, descriptions, anything</p>
+    <div class="banner" id="zero-banner"></div>
+    <div id="search-results">
+      <div class="empty">
+        <div class="empty-ico">🔍</div>
+        <div class="empty-t">Search any food</div>
+        <div class="empty-s">Everyday foods come from the built-in database; packaged products come from Open Food Facts.</div>
       </div>
-      <div style="padding:14px;">
-        <div class="ai-meal-chips">
-          <span class="ai-chip" onclick="setMeal('3 eggs scrambled, half cup non-fat cottage cheese, 1 banana, black coffee')">🍳 Egg breakfast</span>
-          <span class="ai-chip" onclick="setMeal('grilled chicken breast, 1 cup brown rice, steamed broccoli')">🍗 Chicken bowl</span>
-          <span class="ai-chip" onclick="setMeal('2 slices whole wheat toast with peanut butter and honey, 1 apple')">🍞 PB toast</span>
-          <span class="ai-chip" onclick="setMeal('baked potato with non-fat Greek yogurt and chives, side salad')">🥔 Potato meal</span>
-          <span class="ai-chip" onclick="setMeal('non-fat Greek yogurt with mixed berries and 1 tbsp honey')">🫐 Yogurt bowl</span>
-        </div>
-        <textarea class="ai-textarea" id="meal-input" rows="3" placeholder="e.g. 3 eggs, half cup non-fat cottage cheese, a banana and black coffee…"></textarea>
-        <button class="big-teal-btn" id="analyze-btn" onclick="analyzeMeal()" style="margin-top:10px;">✨ Calculate Points</button>
-      </div>
-    </div>
-
-    <div class="ai-loading" id="ai-loading">
-      <div class="ai-loading-icon">🤔</div>
-      <div class="ai-loading-txt">Estimating nutrition and calculating WW points…</div>
-    </div>
-
-    <div class="ai-result-wrap" id="ai-result">
-      <div id="ai-fallback-note" style="display:none;background:var(--amber-light);border:1px solid #f5c060;border-radius:10px;padding:10px 12px;font-size:.74rem;color:#8a5200;line-height:1.5;margin-bottom:10px;"></div>
-      <div class="ai-result-header">
-        <div class="ai-result-pts" id="ai-total-pts">—</div>
-        <div><div class="air-lbl">WW Points (AI Estimate)</div><div class="air-name" id="ai-meal-label">Meal</div></div>
-      </div>
-      <div class="ai-items" id="ai-items"></div>
-      <div class="ai-disclaimer">⚠️ AI estimates — use barcode scan for exact points</div>
-      <button class="ai-add-meal-btn" onclick="addAiMealToLog()">+ Add to Today's Log</button>
     </div>
   </div>
 </div>
 
 <!-- ══════════ MEALS ══════════ -->
 <div class="screen" id="screen-meals">
-  <div class="page-header"><h2>My Meals</h2><p>Build meals once, log them in one tap</p></div>
-  <div class="meals-content">
+  <div class="app-header"><div class="header-main"><h2>Meals</h2><p>Build once, log in one tap</p></div></div>
+  <div class="content">
 
-    <!-- Builder (hidden until "New Meal" tapped) -->
-    <div class="meal-builder" id="meal-builder" style="display:none">
-      <div class="mb-title" id="mb-title">New Meal</div>
-      <div class="form-row">
-        <label class="form-label">Meal name</label>
-        <input class="form-input" type="text" id="mb-name" placeholder="e.g. Taco Tuesday" maxlength="60"/>
+    <div class="card" id="meal-builder" style="display:none">
+      <div class="card-pad">
+        <div class="card-title" id="mb-title">New meal</div>
+        <div class="field">
+          <label class="label" for="mb-name">Meal name</label>
+          <input class="input" type="text" id="mb-name" placeholder="e.g. Taco Tuesday" maxlength="60"/>
+        </div>
+        <div class="field">
+          <label class="label" for="mb-search">Add foods</label>
+          <input class="input" type="search" id="mb-search" placeholder="Search foods…" autocomplete="off"/>
+          <div class="picker" id="mb-search-results"></div>
+        </div>
+        <div id="mb-components"></div>
+        <div class="total-row"><span>Meal total</span><span class="total-n" id="mb-total">0 pts</span></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-primary" style="flex:1" onclick="saveMeal()">Save meal</button>
+          <button class="btn btn-ghost" onclick="cancelMealEdit()">Cancel</button>
+          <button class="btn btn-danger" id="mb-delete" style="display:none" onclick="deleteMeal()">Delete</button>
+        </div>
+        <div style="font-size:.7rem;color:var(--ink-3);margin-top:10px;line-height:1.5">Editing a meal only affects future logs — anything already in your day keeps the Points it was logged with.</div>
       </div>
-      <div class="form-row">
-        <label class="form-label">Add foods</label>
-        <input class="form-input" type="text" id="mb-search" placeholder="Search foods to add…" autocomplete="off"/>
-        <div class="mb-search-results" id="mb-search-results"></div>
-      </div>
-      <div id="mb-components"></div>
-      <div class="mb-total"><span>Meal total</span><span class="mb-total-num" id="mb-total">0 pts</span></div>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="big-teal-btn" style="margin:0;flex:1" onclick="saveMeal()">Save Meal</button>
-        <button class="retake-btn" onclick="cancelMealEdit()">Cancel</button>
-        <button class="edit-del-btn" id="mb-delete" style="display:none;padding:11px 14px" onclick="deleteMeal()">Delete</button>
-      </div>
-      <div style="font-size:.68rem;color:var(--ink3);margin-top:8px;line-height:1.5">Editing a meal only affects future logs — entries already in your day log keep the points they were logged with.</div>
     </div>
 
-    <button class="big-teal-btn" id="new-meal-btn" onclick="openMealBuilder()" style="margin-bottom:14px;">+ New Meal</button>
+    <button class="btn btn-primary btn-block" id="new-meal-btn" onclick="openMealBuilder()" style="margin-bottom:14px;">+ New meal</button>
     <div id="meals-list"></div>
+  </div>
+</div>
+
+<!-- ══════════ DESCRIBE A MEAL (AI) ══════════ -->
+<div class="screen" id="screen-ai">
+  <div class="app-header"><div class="header-main"><h2>Describe a meal</h2><p>Type what you ate in plain words</p></div></div>
+  <div class="content">
+    <div class="card">
+      <div class="card-pad">
+        <div class="chips">
+          <button class="btn-chip" onclick="setMeal('2 eggs, 1 banana, black coffee')">🍳 Egg breakfast</button>
+          <button class="btn-chip" onclick="setMeal('grilled chicken breast, 1 cup brown rice, broccoli')">🍗 Chicken bowl</button>
+          <button class="btn-chip" onclick="setMeal('2 slices whole wheat bread, 1 tbsp peanut butter, 1 apple')">🥪 PB toast</button>
+          <button class="btn-chip" onclick="setMeal('baked potato, plain nonfat Greek yogurt, side salad')">🥔 Potato plate</button>
+        </div>
+        <textarea class="input" id="meal-input" rows="3" placeholder="e.g. 2 eggs, 1 banana and black coffee…"></textarea>
+        <button class="btn btn-primary btn-block" id="analyze-btn" onclick="analyzeMeal()" style="margin-top:10px;">Calculate Points</button>
+      </div>
+    </div>
+
+    <div class="loading" id="ai-loading">
+      <div class="loading-ico">🤔</div>
+      <div style="font-size:.8rem;color:var(--ink-2);margin-top:8px">Working out the nutrition…</div>
+    </div>
+
+    <div class="result" id="ai-result">
+      <div id="ai-fallback-note" style="display:none;background:var(--amber-50);border:1px solid #f0d9b5;border-radius:var(--r-sm);padding:10px 12px;font-size:.75rem;color:#7c4a06;line-height:1.5;margin-bottom:10px;"></div>
+      <div class="ai-head">
+        <div class="ai-pts" id="ai-total-pts">—</div>
+        <div style="min-width:0"><div style="font-size:.73rem;font-weight:650;color:var(--amber)" class="air-lbl">WW Points</div><div style="font-family:var(--num);font-weight:650;font-size:.9rem;margin-top:2px" id="ai-meal-label">Meal</div></div>
+      </div>
+      <div class="ai-list" id="ai-items"></div>
+      <div class="disclaimer">Estimates — scan a barcode for exact Points</div>
+      <button class="btn btn-primary btn-block ai-add-meal-btn" onclick="addAiMealToLog()" style="margin-top:10px">Add to today</button>
+    </div>
   </div>
 </div>
 
 <!-- ══════════ PROGRESS ══════════ -->
 <div class="screen" id="screen-progress">
-  <div class="page-header"><h2>Progress</h2><p>Weekly overview & weight</p></div>
-  <div class="progress-content">
+  <div class="app-header"><div class="header-main"><h2>Progress</h2><p>Your week at a glance</p></div></div>
+  <div class="content">
 
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="stat-num" id="prog-days-tracked" style="color:var(--teal)">0</div>
-        <div class="stat-lbl">Days Tracked</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num" id="prog-weekly-used" style="color:var(--teal)">0</div>
-        <div class="stat-lbl">Pts This Week</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num" id="prog-weeklies-left" style="color:var(--purple)">28</div>
-        <div class="stat-lbl">Weeklies Left</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num" id="prog-avg" style="color:var(--teal)">—</div>
-        <div class="stat-lbl">Avg pts/day</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-n" id="prog-days-tracked" style="color:var(--brand)">0</div><div class="stat-l">Days tracked</div></div>
+      <div class="stat"><div class="stat-n" id="prog-weekly-used" style="color:var(--brand)">0</div><div class="stat-l">Points this week</div></div>
+      <div class="stat"><div class="stat-n" id="prog-weeklies-left" style="color:var(--violet)">28</div><div class="stat-l">Weeklies left</div></div>
+      <div class="stat"><div class="stat-n" id="prog-avg" style="color:var(--brand)">—</div><div class="stat-l">Avg per day</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-pad">
+        <div class="card-title">Daily Points<span style="font-size:.7rem;font-weight:500;color:var(--ink-3)">dashed line = your budget</span></div>
+        <div class="chart" id="week-bar-chart"></div>
       </div>
     </div>
 
-    <div class="week-chart-card">
-      <div class="wcc-title">Daily Points — This Week</div>
-      <div class="bar-chart" id="week-bar-chart"></div>
+    <div class="card">
+      <div class="card-pad">
+        <div class="card-title">Weeklies ledger</div>
+        <div class="ledger" id="weeklies-ledger"></div>
+        <div id="weeklies-overspent"></div>
+        <div class="ledger-note">Going over your daily budget spends weeklies. Finishing a tracked day under budget rolls the unused Points over, up to 4 a day.</div>
+      </div>
     </div>
 
-    <div class="weight-section">
-      <div class="weight-section-title">
-        Weight Log
-        <span style="font-size:.72rem;font-weight:600;color:var(--teal)" id="weight-trend"></span>
+    <div class="card">
+      <div class="card-pad">
+        <div class="card-title">Weight<span style="font-size:.74rem;font-weight:600;color:var(--brand)" id="weight-trend"></span></div>
+        <div class="inline-form" style="margin-bottom:10px;">
+          <input class="input input-round" type="number" id="weight-input" placeholder="lbs, e.g. 182" step="0.1" inputmode="decimal"/>
+          <button class="btn btn-primary btn-sm" onclick="logWeight()">Log</button>
+        </div>
+        <div id="weight-list"></div>
       </div>
-      <div class="weight-log-input">
-        <input class="txt-input" type="number" id="weight-input" placeholder="lbs e.g. 182" step="0.1"/>
-        <button class="teal-btn" onclick="logWeight()">Log</button>
-      </div>
-      <div id="weight-list"><div style="font-size:.78rem;color:var(--ink3);text-align:center;padding:10px">No weight entries yet</div></div>
     </div>
 
   </div>
@@ -698,172 +751,192 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
 
 <!-- ══════════ SETTINGS ══════════ -->
 <div class="screen" id="screen-settings">
-  <div class="page-header"><h2>Settings</h2><p>Budget & preferences</p></div>
-  <div class="settings-content">
+  <div class="app-header">
+    <div class="header-main"><h2>Settings</h2><p>Budget, plan and data</p></div>
+    <button class="icon-btn" onclick="switchScreen('day')" aria-label="Done">✓</button>
+  </div>
+  <div class="content">
 
-    <div class="settings-card">
-      <div class="settings-row">
-        <div class="settings-row-icon">🎯</div>
-        <div class="settings-row-info"><div class="settings-row-label">Daily Points Budget</div><div class="settings-row-sub">Current daily allowance</div></div>
-        <div class="settings-row-val" id="s-daily-val">23</div>
+    <div class="card">
+      <div class="srow">
+        <div class="srow-ico">🎯</div>
+        <div class="srow-body"><div class="srow-l">Daily budget</div><div class="srow-s">Points that reset each day</div></div>
+        <div class="srow-v" id="s-daily-val">23</div>
       </div>
-      <div class="settings-row">
-        <div class="settings-row-icon">📅</div>
-        <div class="settings-row-info"><div class="settings-row-label">Weekly Points</div><div class="settings-row-sub">Extra weekly allowance</div></div>
-        <div class="settings-row-val" id="s-weekly-val">28</div>
+      <div class="srow">
+        <div class="srow-ico">📅</div>
+        <div class="srow-body"><div class="srow-l">Weekly allowance</div><div class="srow-s">Extra Points for the whole week</div></div>
+        <div class="srow-v" id="s-weekly-val">28</div>
       </div>
     </div>
 
-    <div class="settings-section-title">Plan</div>
-    <div class="settings-card">
-      <div style="padding:14px 16px;">
-        <div class="plan-toggle" id="plan-toggle">
+    <div class="section-label">Plan</div>
+    <div class="card">
+      <div class="card-pad">
+        <div class="toggle" id="plan-toggle">
           <button id="plan-btn-standard" onclick="setPlan('standard')">Standard</button>
           <button id="plan-btn-diabetic" onclick="setPlan('diabetic')">Diabetic</button>
         </div>
-        <div style="font-size:.72rem;color:var(--ink2);margin-top:10px;line-height:1.6" id="plan-desc"></div>
+        <div style="font-size:.74rem;color:var(--ink-2);margin-top:11px;line-height:1.55" id="plan-desc"></div>
       </div>
     </div>
 
-    <div class="settings-section-title">Scanner Check</div>
-    <div class="settings-card">
-      <div style="padding:14px;">
-        <div style="font-size:.78rem;color:var(--ink2);margin-bottom:10px;line-height:1.6">If the barcode scanner isn't working, run this and send the result — it shows exactly which part is failing.</div>
-        <button class="big-teal-btn" style="margin-top:0" onclick="runScannerCheck()">🔍 Run Scanner Check</button>
-        <pre id="scan-diag-out" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:10px;font-size:.7rem;line-height:1.6;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Menlo,monospace;color:var(--ink);"></pre>
-        <button id="scan-diag-copy" class="retake-btn" style="display:none;width:100%;margin-top:8px;" onclick="copyScannerCheck()">📋 Copy Result</button>
+    <div class="section-label">Rollovers</div>
+    <div class="card">
+      <div class="srow">
+        <div class="srow-ico">♻️</div>
+        <div class="srow-body">
+          <div class="srow-l">Roll unused Points over</div>
+          <div class="srow-s">Finish a tracked day under budget and the unused Points (up to 4) move into your weeklies</div>
+        </div>
+        <div class="toggle" style="width:104px;flex-shrink:0">
+          <button id="roll-on" onclick="setRollover(true)">On</button>
+          <button id="roll-off" onclick="setRollover(false)">Off</button>
+        </div>
       </div>
     </div>
 
-    <div class="settings-section-title" id="review-title" style="display:none">⚠️ Needs Review</div>
-    <div class="settings-card" id="review-card" style="display:none">
+    <div class="section-label" id="review-title" style="display:none">Needs review</div>
+    <div class="card" id="review-card" style="display:none">
       <div id="review-list"></div>
-      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;">
-        <div style="flex:1;font-size:.7rem;color:var(--ink2);line-height:1.5">These saved foods were logged under the old points program and can't be re-verified (no nutrition data stored). Re-add them via Search or Scan to refresh their points.</div>
-        <button class="retake-btn" onclick="clearUnverifiedRecents()">Clear all</button>
+      <div style="padding:12px 14px;display:flex;gap:10px;align-items:center;">
+        <div style="flex:1;font-size:.72rem;color:var(--ink-3);line-height:1.5">These were logged under the old Points program and can't be re-checked (no nutrition stored). Re-add them from Search or Scan to refresh.</div>
+        <button class="btn btn-ghost btn-sm" onclick="clearUnverifiedRecents()">Clear</button>
       </div>
     </div>
 
-    <div class="settings-section-title">Calculate My Budget</div>
-    <div class="settings-card">
-      <div style="padding:16px;">
-        <div class="form-row">
-          <label class="form-label">Biological Sex</label>
-          <div class="select-wrap"><select class="form-select" id="b-sex"><option value="">Select…</option><option value="male">Male</option><option value="female">Female</option></select></div>
+    <div class="section-label">Work out my budget</div>
+    <div class="card">
+      <div class="card-pad">
+        <div class="field">
+          <label class="label" for="b-sex">Biological sex</label>
+          <div class="select-wrap"><select class="select" id="b-sex"><option value="">Select…</option><option value="male">Male</option><option value="female">Female</option></select></div>
         </div>
-        <div class="form-row form-row-2">
-          <div><label class="form-label">Age</label><input class="form-input" type="number" id="b-age" placeholder="35" min="18"/></div>
-          <div><label class="form-label">Weight (lbs)</label><input class="form-input" type="number" id="b-weight" placeholder="180"/></div>
+        <div class="field row-2">
+          <div><label class="label" for="b-age">Age</label><input class="input" type="number" id="b-age" placeholder="35" min="18" inputmode="numeric"/></div>
+          <div><label class="label" for="b-weight">Weight (lbs)</label><input class="input" type="number" id="b-weight" placeholder="180" inputmode="decimal"/></div>
         </div>
-        <div class="form-row">
-          <label class="form-label">Height</label>
-          <div class="form-row-2"><input class="form-input" type="number" id="b-feet" placeholder="Feet"/><input class="form-input" type="number" id="b-inches" placeholder="Inches"/></div>
+        <div class="field">
+          <label class="label">Height</label>
+          <div class="row-2"><input class="input" type="number" id="b-feet" placeholder="Feet" inputmode="numeric"/><input class="input" type="number" id="b-inches" placeholder="Inches" inputmode="numeric"/></div>
         </div>
-        <div class="form-row">
-          <label class="form-label">Activity Level</label>
-          <div class="select-wrap"><select class="form-select" id="b-activity">
+        <div class="field">
+          <label class="label" for="b-activity">Activity level</label>
+          <div class="select-wrap"><select class="select" id="b-activity">
             <option value="1.2">Sedentary</option>
-            <option value="1.375">Lightly active (1–3x/week)</option>
-            <option value="1.55" selected>Moderately active (3–5x/week)</option>
-            <option value="1.725">Very active (6–7x/week)</option>
+            <option value="1.375">Lightly active (1–3×/week)</option>
+            <option value="1.55" selected>Moderately active (3–5×/week)</option>
+            <option value="1.725">Very active (6–7×/week)</option>
             <option value="1.9">Extra active</option>
           </select></div>
         </div>
-        <div class="form-row">
-          <label class="form-label">Goal</label>
-          <div class="select-wrap"><select class="form-select" id="b-goal">
+        <div class="field">
+          <label class="label" for="b-goal">Goal</label>
+          <div class="select-wrap"><select class="select" id="b-goal">
             <option value="loss">Lose weight</option>
-            <option value="maintain">Maintain weight</option>
+            <option value="maintain">Maintain</option>
             <option value="gain">Gain / build muscle</option>
           </select></div>
         </div>
-        <button class="big-teal-btn" onclick="calcBudget()">Calculate My Budget</button>
-        <div class="budget-result-box" id="budget-result">
-          <div class="brb-num" id="budget-num">—</div>
-          <div class="brb-lbl">Daily Points Budget</div>
-          <div class="brb-sub" id="budget-sub"></div>
-          <button class="apply-btn" onclick="applyBudget()">✓ Use This Budget</button>
+        <button class="btn btn-primary btn-block" onclick="calcBudget()">Calculate</button>
+        <div id="budget-result" style="display:none;background:var(--brand-50);border:1.5px solid var(--brand-100);border-radius:var(--r);padding:16px;margin-top:12px;text-align:center;">
+          <div style="font-family:var(--num);font-weight:700;font-size:2.6rem;color:var(--brand);line-height:1" id="budget-num">—</div>
+          <div style="font-size:.79rem;font-weight:650;color:var(--brand-700);margin-top:4px">Points per day</div>
+          <div style="font-size:.73rem;color:var(--ink-2);margin-top:9px;line-height:1.6;white-space:pre-line" id="budget-sub"></div>
+          <button class="btn btn-primary btn-sm" style="margin-top:11px" onclick="applyBudget()">Use this budget</button>
         </div>
       </div>
     </div>
 
-    <div class="settings-section-title">Data & Backup</div>
-    <div class="settings-card">
-      <div style="padding:14px;">
-        <div style="font-size:.78rem;color:var(--ink2);margin-bottom:10px;line-height:1.6">Export your entire food log and weight history as a JSON file. Use this to back up your data or move to another device.</div>
-        <button class="big-teal-btn" onclick="exportData()" style="margin-top:0">⬇ Export My Data</button>
+    <div class="section-label">Set manually</div>
+    <div class="card">
+      <div class="card-pad">
+        <div class="field">
+          <label class="label" for="manual-daily">Daily budget</label>
+          <div class="inline-form"><input class="input input-round" type="number" id="manual-daily" placeholder="e.g. 23" inputmode="numeric"/><button class="btn btn-primary btn-sm" onclick="setManualBudget()">Set</button></div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label class="label" for="manual-weekly">Weekly allowance</label>
+          <div class="inline-form"><input class="input input-round" type="number" id="manual-weekly" placeholder="e.g. 28" inputmode="numeric"/><button class="btn btn-primary btn-sm" onclick="setManualWeekly()">Set</button></div>
+        </div>
       </div>
     </div>
 
-    <div class="settings-section-title">Manual Override</div>
-    <div class="settings-card">
-      <div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
-        <div>
-          <label class="form-label">Daily Points Budget</label>
-          <div class="input-row" style="margin:0"><input class="txt-input" type="number" id="manual-daily" placeholder="e.g. 23"/><button class="teal-btn" onclick="setManualBudget()">Set</button></div>
-        </div>
-        <div>
-          <label class="form-label">Weekly Points Allowance</label>
-          <div class="input-row" style="margin:0"><input class="txt-input" type="number" id="manual-weekly" placeholder="e.g. 28"/><button class="teal-btn" onclick="setManualWeekly()">Set</button></div>
-        </div>
+    <div class="section-label">Scanner check</div>
+    <div class="card">
+      <div class="card-pad">
+        <div style="font-size:.76rem;color:var(--ink-2);margin-bottom:11px;line-height:1.55">If the scanner misbehaves, run this and send the result — it shows exactly which part is failing on this device.</div>
+        <button class="btn btn-ghost btn-block" onclick="runScannerCheck()">Run scanner check</button>
+        <pre id="scan-diag-out" class="diag" style="display:none"></pre>
+        <button id="scan-diag-copy" class="btn btn-ghost btn-block btn-sm" style="display:none;margin-top:8px" onclick="copyScannerCheck()">Copy result</button>
       </div>
     </div>
+
+    <div class="section-label">Data</div>
+    <div class="card">
+      <div class="card-pad">
+        <div style="font-size:.76rem;color:var(--ink-2);margin-bottom:11px;line-height:1.55">Download your food log, meals and weight history as a JSON file.</div>
+        <button class="btn btn-ghost btn-block" onclick="exportData()">Export my data</button>
+      </div>
+    </div>
+
+    <div class="version" id="version-stamp"></div>
 
   </div>
 </div>
 
 <!-- ══════════ BOTTOM NAV ══════════ -->
 <nav class="nav">
-  <div class="nav-item active" id="nav-day" onclick="switchScreen('day')"><div class="nav-icon">📋</div><div class="nav-label">My Day</div></div>
-  <div class="nav-item" id="nav-scan" onclick="switchScreen('scan')"><div class="nav-icon">📷</div><div class="nav-label">Scan</div></div>
-  <div class="nav-item" id="nav-search" onclick="switchScreen('search')"><div class="nav-icon">🔎</div><div class="nav-label">Search</div></div>
-  <div class="nav-item" id="nav-meals" onclick="switchScreen('meals')"><div class="nav-icon">🍱</div><div class="nav-label">Meals</div></div>
-  <div class="nav-item" id="nav-progress" onclick="switchScreen('progress')"><div class="nav-icon">📈</div><div class="nav-label">Progress</div></div>
-  <div class="nav-item" id="nav-settings" onclick="switchScreen('settings')"><div class="nav-icon">⚙️</div><div class="nav-label">Settings</div></div>
+  <button class="nav-item active" id="nav-day" onclick="switchScreen('day')"><span class="nav-ico">📋</span><span class="nav-lbl">Today</span></button>
+  <button class="nav-item" id="nav-scan" onclick="switchScreen('scan')"><span class="nav-ico">📷</span><span class="nav-lbl">Scan</span></button>
+  <button class="nav-item" id="nav-search" onclick="switchScreen('search')"><span class="nav-ico">🔍</span><span class="nav-lbl">Search</span></button>
+  <button class="nav-item" id="nav-meals" onclick="switchScreen('meals')"><span class="nav-ico">🍱</span><span class="nav-lbl">Meals</span></button>
+  <button class="nav-item" id="nav-progress" onclick="switchScreen('progress')"><span class="nav-ico">📈</span><span class="nav-lbl">Progress</span></button>
 </nav>
 
-<!-- Edit entry bottom sheet -->
-<div class="edit-overlay" id="edit-overlay" onclick="closeEditSheet(event)">
-  <div class="edit-sheet" id="edit-sheet">
-    <div class="edit-sheet-name" id="edit-item-name">Food</div>
-    <div class="edit-sheet-sub" id="edit-item-sub">pts per serving</div>
-    <div class="edit-qty-row">
-      <div class="edit-qty-btn" onclick="editQtyChange(-1)">−</div>
-      <div class="edit-qty-num" id="edit-qty-num">1</div>
-      <div class="edit-qty-btn" onclick="editQtyChange(1)">+</div>
+<!-- Edit entry sheet -->
+<div class="overlay" id="edit-overlay" onclick="closeEditSheet(event)">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="sheet-title" id="edit-item-name">Food</div>
+    <div class="sheet-sub" id="edit-item-sub">Points per serving</div>
+    <div class="big-step">
+      <button onclick="editQtyChange(-1)" aria-label="Fewer">−</button>
+      <span id="edit-qty-num">1</span>
+      <button onclick="editQtyChange(1)" aria-label="More">+</button>
     </div>
-    <div class="edit-pts-preview" id="edit-pts-preview"></div>
-    <div class="edit-actions">
-      <button class="edit-save-btn" onclick="saveEditEntry()">Save Changes</button>
-      <button class="edit-del-btn" onclick="deleteEditEntry()">Delete</button>
+    <div class="step-preview" id="edit-pts-preview"></div>
+    <div class="sheet-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="saveEditEntry()">Save</button>
+      <button class="btn btn-danger" onclick="deleteEditEntry()">Delete</button>
     </div>
   </div>
 </div>
 
-<!-- Preparation / add-ins sheet for conditional zero-point foods -->
-<div class="edit-overlay" id="prep-overlay" onclick="closePrepSheet(event)">
-  <div class="edit-sheet" id="prep-sheet">
-    <div class="edit-sheet-name" id="prep-name">Food</div>
-    <div class="edit-sheet-sub" id="prep-prompt">How was it made?</div>
-    <div class="prep-plain-row" onclick="clearAddIns()">
+<!-- Preparation / add-ins sheet -->
+<div class="overlay" id="prep-overlay" onclick="closePrepSheet(event)">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="sheet-title" id="prep-name">Food</div>
+    <div class="sheet-sub" id="prep-prompt">How was it made?</div>
+    <div class="plain-row" onclick="clearAddIns()">
       <div style="flex:1">
-        <div style="font-size:.85rem;font-weight:700">Plain — nothing added</div>
-        <div style="font-size:.7rem;color:var(--ink2);margin-top:2px">Zero-point food, stays 0 pts</div>
+        <div style="font-size:.86rem;font-weight:650">Plain — nothing added</div>
+        <div style="font-size:.72rem;color:var(--ink-2);margin-top:2px">Zero-point food, stays 0</div>
       </div>
-      <div style="font-family:'Nunito',sans-serif;font-weight:900;font-size:1.3rem;color:var(--green)">0</div>
+      <div style="font-family:var(--num);font-weight:700;font-size:1.3rem;color:var(--green)">0</div>
     </div>
-    <div style="font-size:.72rem;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 8px">Or add what went in</div>
+    <div class="section-label" style="margin:16px 0 6px">Or add what went in</div>
     <div id="prep-addins"></div>
-    <div class="mb-total"><span>Total</span><span class="mb-total-num" id="prep-total">0 pts</span></div>
-    <div class="edit-actions" style="margin-top:10px">
-      <button class="edit-save-btn" onclick="confirmPrep()">Log It</button>
-      <button class="retake-btn" onclick="closePrepSheet()">Cancel</button>
+    <div class="total-row"><span>Total</span><span class="total-n" id="prep-total">0 pts</span></div>
+    <div class="sheet-actions" style="margin-top:10px">
+      <button class="btn btn-primary" style="flex:1" onclick="confirmPrep()">Log it</button>
+      <button class="btn btn-ghost" onclick="closePrepSheet()">Cancel</button>
     </div>
   </div>
 </div>
 
 <div id="toast"></div>
-
 <script>
 // ══ STATE ══════════════════════════════════════════════════════════════════
 const DB = {
@@ -874,6 +947,11 @@ const DB = {
 let dailyBudget   = DB.get('ww_daily_budget', 23);
 let weeklyBudget  = DB.get('ww_weekly_budget', 28);
 let planType      = DB.get('ww_plan', 'standard'); // 'standard' | 'diabetic'
+let rolloverOn    = DB.get('ww_rollover', true);
+// The daily budget in effect on each date. Without this, changing your budget
+// would retroactively rewrite every past day's overflow.
+let budgetHistory = DB.get('ww_budget_history', {});
+const APP_VERSION = '2026.08.06-6';
 let todayKey      = todayStr();
 let weekLog       = DB.get('ww_week_log', {});   // {dateKey: [{id,name,pts,qty,icon,source}]}
 let weightLog     = DB.get('ww_weight_log', []);
@@ -895,14 +973,45 @@ function getWeekDates() {
   return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d.toISOString().slice(0,10);});
 }
 function todayLog() { return weekLog[todayKey]||[]; }
-function todayPoints() { return todayLog().reduce((s,i)=>s+i.totalPts,0); }
-function weeklyOverflowTotal() {
-  return getWeekDates().reduce((total, d) => {
-    const dayPts = (weekLog[d]||[]).reduce((s, x) => s + x.totalPts, 0);
-    return total + Math.max(0, dayPts - dailyBudget);
-  }, 0);
+function dayPoints(d) {
+  return (weekLog[d]||[]).reduce((s,i)=>s+(Number(i.totalPts)||0), 0);
 }
-function weekliesLeft() { return Math.max(0, weeklyBudget - weeklyOverflowTotal()); }
+function todayPoints() { return dayPoints(todayKey); }
+
+// The budget that applied on a given date. Today's is recorded so that once
+// the day is in the past it is judged against the budget actually in force.
+function budgetFor(dateStr) {
+  if (budgetHistory[dateStr] != null) return Number(budgetHistory[dateStr]);
+  return dailyBudget;
+}
+function recordTodayBudget() {
+  if (budgetHistory[todayKey] !== dailyBudget) {
+    budgetHistory[todayKey] = dailyBudget;
+    // Keep it bounded — 400 days is plenty of history.
+    const keys = Object.keys(budgetHistory).sort();
+    while (keys.length > 400) delete budgetHistory[keys.shift()];
+    DB.set('ww_budget_history', budgetHistory);
+  }
+}
+
+// All weekly accounting comes from WeekEngine (see week-engine.js + its unit
+// tests): overflow past the daily budget spends weeklies, and unused Points on
+// completed tracked days roll over into them.
+function weekSummary() {
+  recordTodayBudget();
+  const days = getWeekDates().map(d => ({
+    date: d,
+    points: dayPoints(d),
+    budget: budgetFor(d),
+    tracked: (weekLog[d]||[]).length > 0
+  }));
+  return WeekEngine.computeWeek({
+    days, weeklyBudget, todayKey,
+    rolloverEnabled: rolloverOn,
+    rolloverCap: WeekEngine.DEFAULT_ROLLOVER_CAP
+  });
+}
+function weekliesLeft() { return weekSummary().weekliesLeft; }
 
 // ══ NAV ════════════════════════════════════════════════════════════════════
 function switchScreen(id) {
@@ -956,58 +1065,48 @@ function dbFoodPoints(f) {
 // ══ DAY RENDER ═════════════════════════════════════════════════════════════
 function renderDay() {
   todayKey = todayStr();
-  const log = todayLog();
   const used = todayPoints();
   const remain = dailyBudget - used;
-  const wkLeft = weekliesLeft();
+  const wk = weekSummary();
 
-  // Header date
   const now = new Date();
-  const opts = {weekday:'long',month:'long',day:'numeric'};
-  document.getElementById('day-header-date').textContent = now.toLocaleDateString(undefined, opts);
-  document.getElementById('hero-date').textContent = now.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});
+  document.getElementById('day-header-date').textContent =
+    now.toLocaleDateString(undefined, {weekday:'long', month:'long', day:'numeric'});
+  document.getElementById('hero-date').textContent =
+    now.toLocaleDateString(undefined, {month:'short', day:'numeric'});
 
-  // Hero nums
+  // Hero: show Points left, or how far over the daily budget you are.
+  const over = remain < 0;
+  document.getElementById('hero-label').textContent = over ? 'Over budget' : 'Points left';
+  document.getElementById('hero-remain').textContent = over ? Math.abs(remain) : remain;
+  document.getElementById('hero-unit').innerHTML = over
+    ? 'over your <span id="hero-budget">' + dailyBudget + '</span>'
+    : 'of <span id="hero-budget">' + dailyBudget + '</span> today';
   document.getElementById('hero-used').textContent = used;
-  const remEl = document.getElementById('hero-remain');
-  remEl.textContent = Math.max(0, remain);
-  remEl.className = 'hero-num' + (remain < 0 ? '' : remain === 0 ? '' : ' zero');
-  document.getElementById('hero-budget').textContent = dailyBudget;
-  document.getElementById('hero-weeklies').textContent = wkLeft;
+  document.getElementById('hero-used-lbl').textContent = used + ' used';
+  document.getElementById('hero-weeklies').textContent = wk.weekliesLeft;
+  document.getElementById('hero-week-total').textContent = wk.totalPoints;
   document.getElementById('prog-bar-max').textContent = dailyBudget;
 
-  // Progress bar
-  const pct = Math.min(100, (used / dailyBudget) * 100);
+  const pct = dailyBudget > 0 ? Math.min(100, (used / dailyBudget) * 100) : 0;
   const bar = document.getElementById('prog-bar');
   bar.style.width = pct + '%';
-  bar.className = 'prog-bar-fill' + (pct >= 100 ? ' over' : pct >= 85 ? ' warn' : '');
+  bar.className = 'hero-fill' + (over ? ' over' : pct >= 85 ? ' warn' : '');
 
-  // Weekly strip
-  const weekDates = getWeekDates();
-  const strip = document.getElementById('weekly-days');
+  // Week strip — each day judged against ITS OWN budget.
   const dayNames = ['M','T','W','T','F','S','S'];
-  strip.innerHTML = weekDates.map((d,i) => {
-    const dayPts = (weekLog[d]||[]).reduce((s,x)=>s+x.totalPts,0);
-    const isToday = d === todayKey;
-    const isPast = d < todayKey;
+  document.getElementById('weekly-days').innerHTML = wk.perDay.map((d,i) => {
     let cls = 'wday-dot';
-    if (isToday) cls += ' today';
-    else if (isPast && dayPts > 0) cls += (dayPts <= dailyBudget ? ' good' : ' over');
-    return `<div class="wday"><div class="wday-label">${dayNames[i]}</div><div class="${cls}">${dayPts||''}</div></div>`;
+    if (d.isToday) cls += ' today';
+    if (d.tracked) cls += d.withinBudget ? ' good' : ' over';
+    return `<div class="wday"><div class="wday-l">${dayNames[i]}</div>` +
+           `<div class="${cls}">${d.points || (d.isFuture ? '' : d.tracked ? '0' : '')}</div></div>`;
   }).join('');
+  document.getElementById('weekly-strip-pts').textContent = wk.totalPoints + ' pts';
 
-  // Weekly summary
-  const totalWeek = weekDates.reduce((s,d) => s+(weekLog[d]||[]).reduce((ss,x)=>ss+x.totalPts,0), 0);
-  document.getElementById('weekly-strip-pts').textContent = `${totalWeek} pts this week`;
-
-  // Settings sidebar values
   document.getElementById('s-daily-val').textContent = dailyBudget;
   document.getElementById('s-weekly-val').textContent = weeklyBudget;
 
-  // Weeklies
-  document.getElementById('hero-weeklies').textContent = wkLeft;
-
-  // Recent foods + log list
   renderRecents();
   renderLogList();
 }
@@ -1016,7 +1115,9 @@ function renderLogList() {
   const log = todayLog();
   const el = document.getElementById('log-list');
   if (!log.length) {
-    el.innerHTML = '<div class="log-empty">Nothing logged yet.<br>Tap Scan, Search, or AI Meal to add food.</div>';
+    el.innerHTML = '<div class="empty"><div class="empty-ico">🍽️</div>' +
+      '<div class="empty-t">Nothing logged yet</div>' +
+      '<div class="empty-s">Scan a barcode, search a food, or log a saved meal.</div></div>';
     return;
   }
   el.innerHTML = log.map(item => {
@@ -1030,13 +1131,13 @@ function renderLogList() {
       : item.source === 'meal' ? 'saved meal'
       : 'barcode scan';
     return `<div class="log-item" onclick="openEditSheet('${esc(item.id)}')">
-      <div class="li-icon">${esc(item.icon)||'🍽️'}</div>
-      <div class="li-info">
-        <div class="li-name">${esc(item.name)}${zero?'<span class="zero-badge">ZERO</span>':''}</div>
+      <div class="li-ico">${esc(item.icon)||'🍽️'}</div>
+      <div class="li-body">
+        <div class="li-name">${esc(item.name)}${zero?'<span class="badge-zero">ZERO</span>':''}</div>
         <div class="li-meta">${item.qty>1?`×${item.qty} · `:''}${srcLabel}</div>
       </div>
-      <div class="li-pts ${zero?'zero-pts':''}">${item.totalPts === 0 ? '0 ✓' : item.totalPts + ' pts'}</div>
-      <button class="li-del" onclick="event.stopPropagation();removeFromLog('${esc(item.id)}')">✕</button>
+      <div class="li-pts ${zero?'zero':''}">${item.totalPts}</div>
+      <button class="li-del" onclick="event.stopPropagation();removeFromLog('${esc(item.id)}')" aria-label="Remove">✕</button>
     </div>`;
   }).join('');
 }
@@ -1070,34 +1171,48 @@ function resetDay() {
 
 // ══ PROGRESS ════════════════════════════════════════════════════════════════
 function renderProgress() {
-  const weekDates = getWeekDates();
-  const dayPts = weekDates.map(d => (weekLog[d]||[]).reduce((s,x)=>s+x.totalPts,0));
-  const totalWeek = dayPts.reduce((a,b)=>a+b,0);
-  const daysTracked = dayPts.filter(p=>p>0).length;
-  const avg = daysTracked > 0 ? Math.round(totalWeek/daysTracked) : 0;
+  const wk = weekSummary();
+  const dayPts = wk.perDay.map(d => d.points);
+  const avg = wk.daysTracked > 0 ? Math.round(wk.totalPoints / wk.daysTracked) : 0;
 
-  document.getElementById('prog-days-tracked').textContent = daysTracked;
-  document.getElementById('prog-weekly-used').textContent = totalWeek;
-  document.getElementById('prog-weeklies-left').textContent = weekliesLeft();
+  document.getElementById('prog-days-tracked').textContent = wk.daysTracked;
+  document.getElementById('prog-weekly-used').textContent = wk.totalPoints;
+  const leftEl = document.getElementById('prog-weeklies-left');
+  leftEl.textContent = wk.weekliesLeft;
+  leftEl.style.color = wk.weekliesLeft < 0 ? 'var(--red)' : 'var(--violet)';
   document.getElementById('prog-avg').textContent = avg || '—';
 
-  // Bar chart
+  // Bar chart with a dashed line marking the daily budget.
   const maxPts = Math.max(dailyBudget, ...dayPts, 1);
   const dayLabels = ['M','T','W','T','F','S','S'];
-  const today = weekDates.indexOf(todayKey);
-  document.getElementById('week-bar-chart').innerHTML = weekDates.map((d,i) => {
-    const pts = dayPts[i];
-    const heightPct = (pts/maxPts)*100;
-    const isToday = i===today;
-    const isOver = pts > dailyBudget;
+  document.getElementById('week-bar-chart').innerHTML = wk.perDay.map((d,i) => {
+    const h = (d.points / maxPts) * 100;
+    const budgetLine = 100 - (d.budget / maxPts) * 100;
     return `<div class="bar-col">
-      <div class="bar-val">${pts||''}</div>
-      <div class="bar-wrap"><div class="bar ${isToday?'today-bar':''} ${isOver?'over-bar':''}" style="height:${heightPct}%"></div></div>
-      <div class="bar-day">${dayLabels[i]}</div>
+      <div class="bar-v">${d.points||''}</div>
+      <div class="bar-wrap">
+        <div class="bar-budget" style="top:${Math.max(0,Math.min(100,budgetLine))}%"></div>
+        <div class="bar ${d.isToday?'today':''} ${d.points>d.budget?'over':''}" style="height:${h}%"></div>
+      </div>
+      <div class="bar-d">${dayLabels[i]}</div>
     </div>`;
   }).join('');
 
-  // Weight log
+  // Weeklies ledger — shows exactly where the number comes from.
+  const rows = [
+    ['Weekly allowance', wk.weeklyBudget, ''],
+    ['Rolled over from under-budget days', wk.weekliesEarned ? '+' + wk.weekliesEarned : '0', wk.weekliesEarned ? 'pos' : ''],
+    ['Spent going over daily budget', wk.weekliesUsed ? '−' + wk.weekliesUsed : '0', wk.weekliesUsed ? 'neg' : '']
+  ];
+  let html = rows.map(r => `<div class="ledger-row"><span class="ledger-label">${r[0]}</span>` +
+    `<span class="ledger-val ${r[2]}">${r[1]}</span></div>`).join('');
+  html += `<div class="ledger-row total"><span class="ledger-label">Weeklies left</span>` +
+    `<span class="ledger-val total-n ${wk.weekliesLeft<0?'danger':''}">${wk.weekliesLeft}</span></div>`;
+  document.getElementById('weeklies-ledger').innerHTML = html;
+  document.getElementById('weeklies-overspent').innerHTML = wk.weekliesLeft < 0
+    ? `<div class="overspent-banner">You're ${wk.overspent} Points past your weekly allowance. It resets on Monday.</div>`
+    : '';
+
   renderWeightList();
 }
 
@@ -1115,9 +1230,9 @@ function logWeight() {
 
 function renderWeightList() {
   const el = document.getElementById('weight-list');
-  if (!weightLog.length) { el.innerHTML='<div style="font-size:.78rem;color:var(--ink3);text-align:center;padding:10px">No weight entries yet</div>'; return; }
+  if (!weightLog.length) { el.innerHTML='<div style="font-size:.78rem;color:var(--ink-3);text-align:center;padding:12px">No entries yet</div>'; return; }
   el.innerHTML = weightLog.slice(0,7).map(e => `
-    <div class="weight-entry">
+    <div class="wentry">
       <span>${new Date(e.date+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>
       <strong>${e.weight} lbs</strong>
     </div>`).join('');
@@ -1142,12 +1257,13 @@ function calcBudget() {
   document.getElementById('budget-num').textContent=budget;
   const gl=goal==='loss'?'weight loss':goal==='gain'?'muscle gain':'maintenance';
   document.getElementById('budget-sub').textContent=`TDEE: ~${Math.round(tdee)} cal/day\nTarget: ~${Math.round(target)} cal for ${gl}\nWeeklies: ${budget<25?28:35} pts/week (approx)`;
-  document.getElementById('budget-result').classList.add('show');
+  document.getElementById('budget-result').style.display='block';
 }
 function applyBudget(){
   const n=parseInt(document.getElementById('budget-num').textContent);
   if(!n)return;
   dailyBudget=n; DB.set('ww_daily_budget',n);
+  budgetHistory[todayStr()]=n; DB.set('ww_budget_history',budgetHistory);
   weeklyBudget=n<25?28:35; DB.set('ww_weekly_budget',weeklyBudget);
   renderDay(); showToast(`Budget set to ${n} pts/day ✓`,'ok');
   setTimeout(()=>switchScreen('day'),700);
@@ -1156,6 +1272,7 @@ function setManualBudget(){
   const n=parseInt(document.getElementById('manual-daily').value);
   if(!n||n<1){showToast('Enter a valid number','err');return;}
   dailyBudget=n; DB.set('ww_daily_budget',n);
+  budgetHistory[todayStr()]=n; DB.set('ww_budget_history',budgetHistory);
   document.getElementById('s-daily-val').textContent=n;
   renderDay(); showToast(`Daily budget: ${n} pts ✓`,'ok');
 }
@@ -1394,7 +1511,6 @@ async function startScanner() {
   document.getElementById('prod-result').classList.remove('show'); // clear previous result
   document.getElementById('video-wrap').classList.add('active');
   document.getElementById('scanner-idle').style.display = 'none';
-  document.getElementById('scan-status-bar').classList.add('active');
   scanning = true;
   DB.set('ww_camera_ok', true); // remember so we can auto-open next time
 
@@ -1531,8 +1647,6 @@ function stopScanner() {
   if (vw) vw.classList.remove('active');
   const si = document.getElementById('scanner-idle');
   if (si) si.style.display = 'flex';
-  const sb = document.getElementById('scan-status-bar');
-  if (sb) sb.classList.remove('active');
   const tb = document.getElementById('torch-btn');
   if (tb) { tb.style.display = 'none'; tb.innerHTML = '🔦 Torch'; tb.style.background = ''; tb.style.color = ''; }
   torchOn = false;
@@ -1707,8 +1821,8 @@ async function lookupBarcode(code){
 function renderProductResult(){
   const p=currentProduct;
   document.getElementById('prod-img-wrap').innerHTML=p.image
-    ?`<img class="prod-img" src="${esc(p.image)}" onerror="this.outerHTML='<div class=prod-img-ph>🛒</div>'">`
-    :`<div class="prod-img-ph">🛒</div>`;
+    ?`<img class="prod-img" src="${esc(p.image)}" alt="" onerror="this.outerHTML='<div class=prod-ph>🛒</div>'">`
+    :`<div class="prod-ph">🛒</div>`;
   document.getElementById('prod-name').textContent=p.name;
   document.getElementById('prod-brand').textContent=p.brand;
   const pts=p.pts??'?';
@@ -1717,7 +1831,7 @@ function renderProductResult(){
   // NOT one, and must not be badged as such.
   const zero=p.zero===true;
   const pEl=document.getElementById('pts-display');
-  pEl.textContent=pts; pEl.className='prod-pts-num'+(zero?' zero-pts':pts>12?' high':pts>7?' med':'');
+  pEl.textContent=pts; pEl.className='prod-pts-n'+(zero?' zero':pts>12?' high':pts>7?' med':'');
   document.getElementById('pts-lbl').textContent='WW Points';
   document.getElementById('serv-size').textContent=p.servLabel;
   // Say WHY, so a 0 is never ambiguous: a zero-point food names its category,
@@ -1729,7 +1843,7 @@ function renderProductResult(){
   } else if (pts===0) {
     zmsg.style.display='block';
     zmsg.style.background='var(--bg)';
-    zmsg.style.color='var(--ink2)';
+    zmsg.style.color='var(--ink-2)';
     zmsg.innerHTML='Rounds to 0 for this serving — not a zero-point food, so larger servings will add up';
   } else {
     zmsg.style.display='none';
@@ -1790,7 +1904,7 @@ async function searchFood(){
   const btn=document.getElementById('search-btn'); btn.disabled=true; btn.textContent='…';
   document.getElementById('zero-banner').classList.remove('show');
   const wrap=document.getElementById('search-results');
-  wrap.innerHTML='<div class="search-empty">Searching…</div>';
+  wrap.innerHTML='<div class="searching"><span class="spin-sm" style="border-top-color:var(--brand);border-color:var(--border)"></span>Searching…</div>';
   searchAddables = [];
 
   // Zero-point banner via the engine (respects plan + processing check).
@@ -1805,20 +1919,34 @@ async function searchFood(){
     zb.classList.add('show');
   }
 
-  // Local database results appear instantly, then Open Food Facts fills in.
+  // Built-in foods appear instantly; packaged products stream in after.
   wrap.innerHTML='';
-  FoodDB.search(query).forEach(f=>{
+  const localHits = FoodDB.search(query, 12);
+  if (localHits.length) addSectionLabel(wrap, 'Everyday foods');
+  localHits.forEach(f=>{
     const r = dbFoodPoints(f);
-    appendSearchRow(wrap, { name:f.name, brand:'PointScan foods', servLabel:f.serving,
+    appendSearchRow(wrap, { name:f.name, brand:'', servLabel:f.serving,
       cal:f.cal, pts:r.points, zero:r.zero, conditional:r.conditional, prompt:r.prompt, icon:f.icon, image:null,
       nutrition:{cal:f.cal,sat:f.sat,sug:f.sug,asug:f.asug,pro:f.pro,fib:f.fib} });
   });
 
   try{
-    const res=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=10&fields=id,product_name,brands,nutriments,serving_size,image_small_url,categories_tags`,
+    // sort_by=unique_scans_n puts widely-scanned (real, popular) products
+    // first — the default ordering buries them under obscure entries.
+    const res=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=24&sort_by=unique_scans_n&fields=id,product_name,brands,nutriments,serving_size,image_small_url,categories_tags`,
       { signal: timeoutSignal(12000) });
     const data=await res.json();
-    const products=(data.products||[]).filter(p=>p.product_name);
+    const seen=Object.create(null);
+    const products=(data.products||[]).filter(p=>{
+      if(!p.product_name) return false;
+      // Drop entries with no calorie data — they can't be scored.
+      const n=p.nutriments||{};
+      if(n['energy-kcal_serving']==null && n['energy-kcal_100g']==null) return false;
+      const key=(p.product_name+'|'+(p.brands||'')).toLowerCase().replace(/\s+/g,' ').trim();
+      if(seen[key]) return false;
+      seen[key]=1; return true;
+    }).slice(0,12);
+    if (products.length) addSectionLabel(wrap, 'Packaged products');
     products.forEach(p=>{
       const n=p.nutriments||{}, cats=(p.categories_tags||[]).join(' ');
       const srv=n['energy-kcal_serving']!=null;
@@ -1834,9 +1962,9 @@ async function searchFood(){
         nutrition:{cal,sat,sug,asug:asug??null,pro,fib} });
     });
   }catch(e){
-    if(!wrap.children.length) wrap.innerHTML='<div class="search-empty">Network error — check your connection and try again.</div>';
+    if(!wrap.children.length) wrap.innerHTML='<div class="empty"><div class="empty-ico">📡</div><div class="empty-t">Couldn\'t reach the product database</div><div class="empty-s">Built-in foods still work offline — try a plainer term like "chicken breast".</div></div>';
   }
-  if(!wrap.children.length) wrap.innerHTML='<div class="search-empty">No results. Try a different spelling.</div>';
+  if(!wrap.children.length) wrap.innerHTML='<div class="empty"><div class="empty-ico">🤷</div><div class="empty-t">No matches</div><div class="empty-s">Try a simpler term, or scan the barcode instead.</div></div>';
   btn.disabled=false; btn.textContent='Search';
 }
 
@@ -1847,19 +1975,26 @@ function appendSearchRow(wrap, item){
   const el=document.createElement('div'); el.className='sri';
   el.innerHTML=`
     ${item.image
-      ?`<img class="sri-thumb" src="${esc(item.image)}" onerror="this.outerHTML='<div class=sri-thumb-ph>🥗</div>'">`
-      :`<div class="sri-thumb-ph">${esc(item.icon)||'🥗'}</div>`}
-    <div class="sri-info">
-      <div class="sri-name">${esc(item.name)}${item.zero?'<span class="zero-badge">ZERO</span>':''}</div>
-      ${item.brand?`<div class="sri-brand">${esc(item.brand)}</div>`:''}
-      <div class="sri-cal">${esc(item.servLabel)}${item.cal!=null?` · ${Math.round(item.cal)} cal`:''}</div>
+      ?`<img class="sri-thumb" src="${esc(item.image)}" alt="" onerror="this.outerHTML='<div class=sri-ph>🥗</div>'">`
+      :`<div class="sri-ph">${esc(item.icon)||'🥗'}</div>`}
+    <div class="sri-body">
+      <div class="sri-name">${esc(item.name)}${item.zero?'<span class="badge-zero">ZERO</span>':''}</div>
+      <div class="sri-sub">${esc(item.servLabel)}${item.cal!=null?` · ${Math.round(item.cal)} cal`:''}${item.brand?' · '+esc(item.brand):''}</div>
     </div>
-    <div class="sri-pts-col">
-      <div class="sri-pts-num ${cls}">${pts??'?'}</div>
-      <div class="sri-pts-lbl">${pts==null?'review':'pts'}</div>
+    <div class="sri-pts">
+      <div class="sri-pts-n ${cls}">${pts??'?'}</div>
+      <div class="sri-pts-l">${pts==null?'n/a':'pts'}</div>
     </div>
-    <button class="sri-add" onclick="quickAddFromSearch(${idx})">+ Log</button>`;
+    <button class="sri-add" onclick="quickAddFromSearch(${idx})" aria-label="Add">+</button>`;
   wrap.appendChild(el);
+}
+
+function addSectionLabel(wrap, text){
+  const d=document.createElement('div');
+  d.className='section-label';
+  d.style.margin='4px 2px 8px';
+  d.textContent=text;
+  wrap.appendChild(d);
 }
 
 function quickAddFromSearch(idx){
@@ -2009,24 +2144,24 @@ function renderAiResult(meal){
     ? 'WW Points (from your food database)' : 'WW Points (AI estimate)';
 
   let rows = (meal.items||[]).map(item=>`
-    <div class="ai-item-row">
+    <div class="ai-row">
       <div style="font-size:1rem">${item.isZero?'✅':'🍽️'}</div>
-      <div style="flex:1"><div class="ai-item-name">${esc(item.name)}${item.isZero?'<span class="zero-badge">ZERO</span>':''}</div><div class="ai-item-cal">${esc(item.calories)} cal · ${esc(item.protein)}g protein · ${esc(item.note||'')}</div></div>
-      <div class="ai-item-pts-col">${esc(item.points)} pts</div>
+      <div style="flex:1"><div class="ai-name">${esc(item.name)}${item.isZero?'<span class="badge-zero">ZERO</span>':''}</div><div class="ai-sub">${esc(item.calories)} cal · ${esc(item.protein)}g protein · ${esc(item.note||'')}</div></div>
+      <div class="ai-row-pts">${esc(item.points)}</div>
     </div>`).join('');
 
   // Anything the local parser couldn't identify is shown, never silently
   // dropped — otherwise the total would look complete when it isn't.
   if (meal.unmatched && meal.unmatched.length) {
     rows += meal.unmatched.map(u=>`
-      <div class="ai-item-row" style="background:var(--amber-light)">
+      <div class="ai-row" style="background:var(--amber-50)">
         <div style="font-size:1rem">❓</div>
-        <div style="flex:1"><div class="ai-item-name">${esc(u)}</div>
-        <div class="ai-item-cal">Not in the food database — search or scan it to add its points</div></div>
-        <div class="ai-item-pts-col" style="color:var(--ink3)">?</div>
+        <div style="flex:1"><div class="ai-name">${esc(u)}</div>
+        <div class="ai-sub">Not in the food database — search or scan it to add its points</div></div>
+        <div class="ai-row-pts" style="color:var(--ink-3)">?</div>
       </div>`).join('');
   }
-  if (!rows) rows = '<div class="ai-item-row"><div style="flex:1;font-size:.8rem;color:var(--ink2)">Nothing recognised in that description. Try naming foods plainly, e.g. “2 eggs, 1 banana, 1 slice whole wheat bread”.</div></div>';
+  if (!rows) rows = '<div class="ai-row"><div style="flex:1;font-size:.8rem;color:var(--ink-2)">Nothing recognised in that description. Try naming foods plainly, e.g. “2 eggs, 1 banana, 1 slice whole wheat bread”.</div></div>';
   document.getElementById('ai-items').innerHTML = rows;
 
   const note = document.getElementById('ai-fallback-note');
@@ -2037,7 +2172,7 @@ function renderAiResult(meal){
     note.style.display = 'none';
   }
 
-  const disc = document.querySelector('.ai-disclaimer');
+  const disc = document.querySelector('.disclaimer');
   if (disc) disc.textContent = meal.local
     ? 'Estimates from the built-in database — scan a barcode for exact points'
     : '⚠️ AI estimates — use barcode scan for exact points';
@@ -2146,11 +2281,11 @@ function renderRecents() {
     const label = r.name.length > 20 ? r.name.slice(0, 20) + '…' : r.name;
     const legacy = r.v !== 2;
     const ptsLabel = legacy ? '⚠' : (r.zero === true ? '0✓' : r.pts + 'pt');
-    return `<div class="recent-chip" onclick="quickAddRecent(${i})" title="${legacy?'Logged under the old points program — points unverified':''}">
-      <span class="recent-chip-icon">${esc(r.icon)||'🍽️'}</span>
-      <span class="recent-chip-name">${esc(label)}</span>
-      <span class="recent-chip-pts">${ptsLabel}</span>
-    </div>`;
+    return `<button class="recent-chip" onclick="quickAddRecent(${i})">
+      <span>${esc(r.icon)||'🍽️'}</span>
+      <span class="recent-n">${esc(label)}</span>
+      <span class="recent-p">${ptsLabel}</span>
+    </button>`;
   }).join('');
 }
 
@@ -2206,21 +2341,21 @@ function renderPrepAddIns() {
   document.getElementById('prep-addins').innerHTML = FoodDB.ADD_INS.map(a => {
     const qty = prepAddIns[a.id] || 0;
     const pts = addInPoints(a);
-    return `<div class="prep-addin-row">
+    return `<div class="addin-row">
       <span>${esc(a.icon)}</span>
-      <div class="prep-addin-info">
-        <div class="prep-addin-name">${esc(a.name)}</div>
-        <div class="prep-addin-serv">${esc(a.serving)} · ${pts} pt${pts===1?'':'s'} each</div>
+      <div class="addin-body">
+        <div class="addin-n">${esc(a.name)}</div>
+        <div class="addin-s">${esc(a.serving)} · ${pts} pt${pts===1?'':'s'} each</div>
       </div>
-      <div class="mb-qty">
-        <button onclick="prepQty('${esc(a.id)}',-1)">−</button><span>${qty}</span><button onclick="prepQty('${esc(a.id)}',1)">+</button>
+      <div class="mini-step">
+        <button onclick="prepQty('${esc(a.id)}',-1)" aria-label="Less">−</button><span>${qty}</span><button onclick="prepQty('${esc(a.id)}',1)" aria-label="More">+</button>
       </div>
-      <div class="prep-addin-pts">${qty ? pts*qty : ''}</div>
+      <div class="addin-pts">${qty ? pts*qty : ''}</div>
     </div>`;
   }).join('');
-  const t = prepTotal();
-  document.getElementById('prep-total').textContent = t + ' pts';
+  document.getElementById('prep-total').textContent = prepTotal() + ' pts';
 }
+
 function prepQty(id, d) {
   prepAddIns[id] = Math.max(0, (prepAddIns[id]||0) + d);
   if (!prepAddIns[id]) delete prepAddIns[id];
@@ -2273,21 +2408,25 @@ function mealTotal(m){ return m.components.reduce((s,c)=>s+componentPoints(c).pt
 function renderMeals(){
   const wrap = document.getElementById('meals-list');
   if (!meals || !meals.length) {
-    wrap.innerHTML = '<div class="search-empty">No meals yet. Tap “New Meal” to build one.</div>';
+    wrap.innerHTML = '<div class="empty"><div class="empty-ico">🍱</div>' +
+      '<div class="empty-t">No meals yet</div>' +
+      '<div class="empty-s">Build a meal once and log the whole thing in a single tap.</div></div>';
     return;
   }
   wrap.innerHTML = meals.map((m,i)=>{
     const total = mealTotal(m);
     const compStr = m.components.map(c=>`${esc(c.name)}${c.qty!==1?` ×${c.qty}`:''}`).join(', ');
-    return `<div class="meal-card">
-      <div class="meal-card-icon">${esc(m.icon)||'🍱'}</div>
-      <div class="meal-card-info">
-        <div class="meal-card-name">${esc(m.name)}</div>
-        <div class="meal-card-sub">${compStr}</div>
+    return `<div class="meal">
+      <div class="meal-ico">${esc(m.icon)||'🍱'}</div>
+      <div class="meal-body">
+        <div class="meal-name">${esc(m.name)}</div>
+        <div class="meal-sub">${compStr}</div>
       </div>
-      <div class="meal-card-pts ${total===0?'zero':''}">${total}</div>
-      <button class="meal-log-btn" onclick="logMeal(${i})">+ Log</button>
-      <button class="meal-edit-btn" onclick="openMealBuilder(${i})">Edit</button>
+      <div class="meal-pts ${total===0?'zero':''}">${total}</div>
+      <div class="meal-actions">
+        <button class="btn btn-primary btn-sm" onclick="logMeal(${i})">Log</button>
+        <button class="btn btn-ghost btn-icon" onclick="openMealBuilder(${i})" aria-label="Edit ${esc(m.name)}">✏️</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2333,23 +2472,24 @@ function cancelMealEdit(){
 function renderBuilderComponents(){
   const wrap = document.getElementById('mb-components');
   if (!builderMeal.components.length) {
-    wrap.innerHTML = '<div style="font-size:.78rem;color:var(--ink3);text-align:center;padding:12px">No foods yet — search above to add.</div>';
+    wrap.innerHTML = '<div style="font-size:.79rem;color:var(--ink-3);text-align:center;padding:14px">No foods yet — search above to add some.</div>';
   } else {
     wrap.innerHTML = builderMeal.components.map((c,i)=>{
       const p = componentPoints(c);
-      return `<div class="mb-comp-row">
+      return `<div class="comp-row">
         <span>${esc(c.icon)||'🍽️'}</span>
-        <div class="mb-comp-name">${esc(c.name)}<div style="font-size:.65rem;color:var(--ink3);font-weight:400">${esc(c.serving||'')}</div></div>
-        <div class="mb-qty">
-          <button onclick="builderQty(${i},-0.5)">−</button><span>${c.qty}</span><button onclick="builderQty(${i},0.5)">+</button>
+        <div class="comp-name">${esc(c.name)}<div class="comp-serv">${esc(c.serving||'')}</div></div>
+        <div class="mini-step">
+          <button onclick="builderQty(${i},-0.5)" aria-label="Less">−</button><span>${c.qty}</span><button onclick="builderQty(${i},0.5)" aria-label="More">+</button>
         </div>
-        <div class="mb-comp-pts ${p.zero?'zero':''}">${p.zero?'0✓':p.pts}</div>
-        <button class="li-del" onclick="builderRemove(${i})">✕</button>
+        <div class="comp-pts ${p.zero?'zero':''}">${p.zero?'0':p.pts}</div>
+        <button class="li-del" onclick="builderRemove(${i})" aria-label="Remove">✕</button>
       </div>`;
     }).join('');
   }
   document.getElementById('mb-total').textContent = mealTotal(builderMeal) + ' pts';
 }
+
 function builderQty(i,d){
   const c = builderMeal.components[i]; if (!c) return;
   c.qty = Math.max(0.5, Math.round((c.qty + d) * 2) / 2);
@@ -2370,16 +2510,17 @@ document.getElementById('mb-search').addEventListener('input', function(){
   const q = this.value.trim();
   const wrap = document.getElementById('mb-search-results');
   if (q.length < 2) { wrap.innerHTML=''; return; }
-  const hits = FoodDB.search(q).slice(0, 8);
+  const hits = FoodDB.search(q, 8);
   wrap.innerHTML = hits.map(f=>{
     const r = dbFoodPoints(f);
-    return `<div class="mb-sr-item" onclick="builderAddFood('${esc(f.id)}')">
-      <span>${esc(f.icon)}</span><span>${esc(f.name)}</span>
-      <span style="font-size:.68rem;color:var(--ink3)">${esc(f.serving)}</span>
-      <span class="mb-sr-pts ${r.zero?'zero':''}">${r.zero?'0✓':r.points}</span>
+    return `<div class="picker-item" onclick="builderAddFood('${esc(f.id)}')">
+      <span>${esc(f.icon)}</span>
+      <span style="min-width:0"><div>${esc(f.name)}</div><div style="font-size:.68rem;color:var(--ink-3)">${esc(f.serving)}</div></span>
+      <span class="picker-pts ${r.zero?'zero':''}">${r.zero?'0':r.points}</span>
     </div>`;
-  }).join('') || '<div style="font-size:.75rem;color:var(--ink3);padding:6px">No matches in the food database.</div>';
+  }).join('') || '<div style="font-size:.76rem;color:var(--ink-3);padding:8px">No matches in the food database.</div>';
 });
+
 function saveMeal(){
   if (!builderMeal) return;
   const name = document.getElementById('mb-name').value.trim();
@@ -2521,7 +2662,20 @@ function setPlan(p){
     ? 'Diabetic plan: fruit, corn, potatoes, oats & yogurt now carry points'
     : 'Standard plan active ✓', 'ok');
 }
+function setRollover(on){
+  rolloverOn = !!on;
+  DB.set('ww_rollover', rolloverOn);
+  renderSettingsExtras();
+  renderDay();
+  showToast(rolloverOn ? 'Rollovers on ✓' : 'Rollovers off', 'ok');
+}
+
 function renderSettingsExtras(){
+  const rOn = document.getElementById('roll-on'), rOff = document.getElementById('roll-off');
+  if (rOn) rOn.classList.toggle('active', rolloverOn);
+  if (rOff) rOff.classList.toggle('active', !rolloverOn);
+  const vs = document.getElementById('version-stamp');
+  if (vs) vs.textContent = 'PointScan · build ' + APP_VERSION;
   const std = document.getElementById('plan-btn-standard');
   const dia = document.getElementById('plan-btn-diabetic');
   if (std) std.classList.toggle('active', planType === 'standard');
@@ -2539,9 +2693,9 @@ function renderSettingsExtras(){
   title.style.display='block'; card.style.display='block';
   document.getElementById('review-list').innerHTML = un.map(r=>`
     <div class="review-item">
-      <span class="review-flag">⚠️</span>
+      <span style="font-size:1rem;flex-shrink:0">⚠️</span>
       <div style="flex:1">${esc(r.name)}</div>
-      <div style="color:var(--ink3);font-size:.7rem">old: ${r.pts} pts (unverified)</div>
+      <div style="color:var(--ink-3);font-size:.71rem;flex-shrink:0">was ${r.pts} pts</div>
     </div>`).join('');
 }
 function clearUnverifiedRecents(){
@@ -2559,6 +2713,9 @@ function exportData() {
     app: 'PointScan',
     program: '2025/2026 WW Points (approximation)',
     plan: planType,
+    appVersion: APP_VERSION,
+    rollovers: rolloverOn,
+    budgetHistory,
     dailyBudget,
     weeklyBudget,
     foodLog: weekLog,

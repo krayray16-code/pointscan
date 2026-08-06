@@ -71,7 +71,7 @@ async function worstOverlap() {
     const nav = document.querySelector('.nav').getBoundingClientRect();
     const active = document.querySelector('.screen.active');
     let worst = 0, culprit = null;
-    active.querySelectorAll('button,.qa-btn,.sri-add,.add-log-btn,.big-teal-btn,.meal-log-btn,.teal-btn,input,select').forEach(el => {
+    active.querySelectorAll('button,.quick-btn,.sri-add,.prod-add .btn-primary,.big-teal-btn,.btn-primary,.teal-btn,input,select').forEach(el => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 && r.height === 0) return;
       const over = r.bottom - nav.top;
@@ -93,17 +93,17 @@ for (const screen of ['day','scan','search','meals','progress','settings']) {
 // The reported case: after a scan, the "Add to Today's Log" button.
 await page.evaluate(() => switchScreen('scan'));
 await page.fill('#manual-barcode', '049000028911');
-await page.click('text=Look Up');
+await page.click('text=Look up');
 await page.waitForTimeout(900);
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await page.waitForTimeout(300);
 const afterScan = await page.evaluate(() => {
   const nav = document.querySelector('.nav').getBoundingClientRect();
-  const btn = document.querySelector('.add-log-btn').getBoundingClientRect();
+  const btn = document.querySelector('.prod-add .btn-primary').getBoundingClientRect();
   return { over: btn.bottom - nav.top, visible: btn.height > 0 };
 });
 check(afterScan.visible && afterScan.over <= 0, `after a scan the "Add to Today's Log" button is fully visible (overlap ${Math.round(afterScan.over)}px)`);
-check(await page.locator('.add-log-btn').isVisible(), 'add-to-log button is clickable after scan');
+check(await page.locator('.prod-add .btn-primary').isVisible(), 'add-to-log button is clickable after scan');
 
 console.log('iOS input zoom:');
 const smallInputs = await page.evaluate(() => {
@@ -124,7 +124,7 @@ await page.waitForTimeout(1500);
 check(await page.locator('#ai-result').evaluate(el => el.classList.contains('show')), 'still produces a result when the AI is over quota');
 check(await page.locator('#ai-fallback-note').isVisible(), 'explains that it fell back to the local database');
 check(/quota/i.test(await page.locator('#ai-fallback-note').textContent()), 'names the reason (quota)');
-const rows = await page.locator('.ai-item-row').count();
+const rows = await page.locator('.ai-row').count();
 check(rows >= 3, `parsed the meal into items locally (${rows} rows)`);
 const total = parseInt(await page.locator('#ai-total-pts').textContent(), 10);
 // eggs 0 + banana 0 + 2x wheat bread (2 each) + peanut butter 6 = 10
