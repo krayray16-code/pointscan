@@ -134,7 +134,7 @@ check((await page.locator('#prod-name').textContent()) === 'My Mystery Chips', '
 
 console.log('5. Scanner keeps running after a hit:');
 await page.evaluate(() => { document.getElementById('prod-result').classList.remove('show'); });
-await page.click('#scanner-idle .btn-primary');
+await page.evaluate(async () => { if (!scanning) await startScanner(); });
 await page.waitForFunction(() => window.__lookups.some(c => c === '4006381333931'), null, { timeout: 25000 }).catch(() => {});
 await page.waitForTimeout(900);
 check(await page.evaluate(() => !!document.getElementById('scanner-video').srcObject), 'camera is STILL running after a successful scan');
@@ -147,6 +147,46 @@ await page.waitForTimeout(1500);
 const hits2 = await page.evaluate(() => window.__lookups.filter(c => c === '4006381333931').length);
 check(hits2 === hits, `the same code in frame is not looked up repeatedly (${hits} -> ${hits2})`);
 await page.evaluate(() => stopScanner());
+
+
+console.log('6. Scanner guidance and escape hatches:');
+await page.evaluate(() => { DB.set('ww_scan_history', []); switchScreen('scan'); });
+await page.waitForTimeout(200);
+check(await page.locator('.scan-links button', { hasText: 'Search manually' }).isVisible(), 'manual-search escape hatch is on the scan screen');
+check(await page.locator('.scan-links button', { hasText: 'Take a photo' }).isVisible(), 'photo fallback is on the scan screen');
+await page.locator('.scan-links button', { hasText: 'Search manually' }).click();
+await page.waitForTimeout(250);
+check(await page.locator('#screen-search').evaluate(el => el.classList.contains('active')), 'it actually goes to Search');
+await page.evaluate(() => switchScreen('scan'));
+// The camera may already be live (permission is remembered and it auto-opens),
+// so only tap "Open camera" when it is actually idle.
+await page.evaluate(async () => { if (!scanning) await startScanner(); });
+await page.waitForTimeout(1000);
+check(await page.locator('#aim-label').isVisible(), 'shows "Align the barcode inside the box"');
+check(/align the barcode/i.test(await page.locator('#aim-label').textContent()), 'aiming text is explicit');
+check(await page.locator('#scan-status-txt .scanning-dots').count() === 1, 'live animated Scanning indicator is present');
+await page.evaluate(() => stopScanner());
+
+console.log('7. Recently scanned history:');
+await page.evaluate(() => switchScreen('scan'));
+await page.fill('#manual-barcode', '049000028911');
+await page.click('text=Look up');
+await page.waitForTimeout(800);
+await page.fill('#manual-barcode', '4006381333931');
+await page.click('text=Look up');
+await page.waitForTimeout(800);
+check(await page.locator('#scan-history-wrap').isVisible(), 'history section appears after scans');
+check(await page.locator('.hist-row').count() === 2, 'both scans recorded (' + (await page.locator('.hist-row').count()) + ')');
+check(/Frozen Broccoli/.test(await page.locator('.hist-row').first().textContent()), 'newest scan is first');
+// tapping a history row re-opens that product
+await page.locator('.hist-row', { hasText: 'Corn Pops' }).click();
+await page.waitForTimeout(700);
+check((await page.locator('#prod-name').textContent()).includes('Corn Pops'), 'tapping history re-opens the product');
+// re-scanning the same code must not duplicate the row
+await page.fill('#manual-barcode', '049000028911');
+await page.click('text=Look up');
+await page.waitForTimeout(700);
+check(await page.locator('.hist-row').count() === 2, 'a repeat scan does not duplicate the history row');
 
 const real = errors.filter(e => !/net::ERR_|Failed to load resource|ERR_ABORTED/.test(e));
 check(real.length === 0, 'no JS errors (' + real.join(' | ') + ')');

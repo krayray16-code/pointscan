@@ -175,7 +175,7 @@ console.log('Phase A2 — decoder core and photo upload path:');
   fs.writeFileSync(tmpPng, Buffer.from(pngB64, 'base64'));
 
   await page.click('#nav-scan');
-  await page.click('text=Camera trouble?');
+  await page.locator('.scan-links button', { hasText: 'Take a photo' }).click();
   await page.waitForTimeout(200);
   await page.setInputFiles('#barcode-file-input', tmpPng);
   await page.waitForFunction(() => window.__scannedCode, null, { timeout: 25000 }).catch(() => {});
@@ -262,9 +262,9 @@ console.log('Phase B — camera lifecycle (blank camera):');
 
   // Photo fallback still reachable
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: false, configurable: true }); });
-  await page.click('text=Camera trouble?');
+  await page.locator('.scan-links button', { hasText: 'Take a photo' }).click();
   await page.waitForTimeout(200);
-  check(await page.locator('#photo-scanner').isVisible(), 'photo fallback reachable from the live scanner');
+  check(await page.locator('#photo-scanner').isVisible(), 'photo fallback reachable from the scan screen');
   check(!(await page.locator('#live-scanner').isVisible()), 'live scanner hidden while in photo mode');
   await page.click('text=Back to live scanner');
   await page.waitForTimeout(200);

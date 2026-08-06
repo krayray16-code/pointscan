@@ -14,9 +14,9 @@
      third-party request would otherwise leave iOS with no scanner at all.
      @zxing/library 0.19.1 — Apache-2.0, see vendor/zxing-LICENSE -->
 <script src="./vendor/zxing-0.19.1.min.js"></script>
-<script src="./points-engine.js?v=7"></script>
-<script src="./food-db.js?v=7"></script>
-<script src="./week-engine.js?v=7"></script>
+<script src="./points-engine.js?v=8"></script>
+<script src="./food-db.js?v=8"></script>
+<script src="./week-engine.js?v=8"></script>
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    PointScan design system
@@ -233,6 +233,30 @@ textarea.input{resize:none;min-height:86px;border-radius:var(--r-sm);line-height
 .reticle-box i:nth-child(3){bottom:-2px;left:-2px;border-right:0;border-top:0;border-radius:0 0 0 12px;}
 .reticle-box i:nth-child(4){bottom:-2px;right:-2px;border-left:0;border-top:0;border-radius:0 0 12px 0;}
 .reticle-box.hit{box-shadow:0 0 0 9999px rgba(6,10,12,.55), inset 0 0 0 3px #4fe3d3;transition:box-shadow .12s;}
+.aim-label{position:absolute;left:50%;transform:translateX(-50%);text-align:center;
+  color:#fff;font-size:.78rem;font-weight:600;pointer-events:none;white-space:nowrap;
+  top:calc(50% - 20% - 40px);background:rgba(6,10,12,.62);padding:6px 14px;border-radius:99px;
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+.scanning-dots{display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle;}
+.scanning-dots i{width:4px;height:4px;border-radius:50%;background:#4fe3d3;display:block;
+  animation:dotPulse 1.1s ease-in-out infinite;}
+.scanning-dots i:nth-child(2){animation-delay:.16s}
+.scanning-dots i:nth-child(3){animation-delay:.32s}
+@keyframes dotPulse{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+.scan-links{display:flex;gap:8px;margin-bottom:14px;}
+.scan-links button{flex:1;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:10px 8px;font-size:.76rem;font-weight:600;color:var(--brand);
+  box-shadow:var(--sh-sm);}
+.scan-links button:active{background:var(--brand-50);}
+.hist-row{display:flex;align-items:center;gap:10px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:7px;
+  box-shadow:var(--sh-sm);width:100%;text-align:left;}
+.hist-name{flex:1;min-width:0;font-size:.83rem;font-weight:600;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;}
+.hist-sub{font-size:.68rem;color:var(--ink-3);margin-top:1px;}
+.hist-pts{font-family:var(--num);font-weight:700;font-size:1.05rem;color:var(--brand);
+  flex-shrink:0;font-variant-numeric:tabular-nums;}
+.hist-pts.zero{color:var(--green);}
 .reticle-line{position:absolute;left:8px;right:8px;height:2px;border-radius:2px;
   background:linear-gradient(90deg,transparent,#4fe3d3,transparent);animation:sweep 2s ease-in-out infinite;}
 @keyframes sweep{0%,100%{top:12%;opacity:.35}50%{top:86%;opacity:1}}
@@ -541,9 +565,12 @@ pre.diag{background:var(--surface-2);border:1px solid var(--border);border-radiu
       <div class="cam-card">
         <div id="video-wrap">
           <video id="scanner-video" autoplay muted playsinline webkit-playsinline></video>
-          <div class="reticle"><div class="reticle-box"><i></i><i></i><i></i><i></i><div class="reticle-line"></div></div></div>
+          <div class="reticle">
+            <div class="aim-label" id="aim-label">Align the barcode inside the box</div>
+            <div class="reticle-box"><i></i><i></i><i></i><i></i><div class="reticle-line"></div></div>
+          </div>
           <div class="cam-hint">
-            <span id="scan-status-txt">Hold steady over the barcode</span>
+            <span id="scan-status-txt">Scanning<span class="scanning-dots" id="scan-dots"><i></i><i></i><i></i></span></span>
             <div style="display:flex;gap:8px;align-items:center;">
               <button class="cam-round" id="zoom-btn" onclick="cycleZoom()" style="display:none" aria-label="Zoom">2×</button>
               <button class="cam-round" id="torch-btn" onclick="toggleTorch()" style="display:none" aria-label="Torch">🔦</button>
@@ -558,7 +585,14 @@ pre.diag{background:var(--surface-2);border:1px solid var(--border);border-radiu
           <button class="btn btn-primary" onclick="startScanner()">Open camera</button>
         </div>
       </div>
-      <span class="link-sm" onclick="showPhotoFallback()">Camera trouble? Snap a photo instead</span>
+      <div class="scan-links">
+        <button onclick="switchScreen('search')">🔍 Search manually</button>
+        <button onclick="showPhotoFallback()">📸 Take a photo</button>
+      </div>
+      <div id="scan-history-wrap" style="display:none">
+        <div class="section-label" style="margin-top:2px">Recently scanned</div>
+        <div id="scan-history"></div>
+      </div>
     </div>
 
     <div id="photo-scanner" style="display:none">
@@ -987,7 +1021,7 @@ let rolloverOn    = DB.get('ww_rollover', true);
 // The daily budget in effect on each date. Without this, changing your budget
 // would retroactively rewrite every past day's overflow.
 let budgetHistory = DB.get('ww_budget_history', {});
-const APP_VERSION = '2026.08.06-7';
+const APP_VERSION = '2026.08.06-8';
 let todayKey      = todayStr();
 let weekLog       = DB.get('ww_week_log', {});   // {dateKey: [{id,name,pts,qty,icon,source}]}
 let weightLog     = DB.get('ww_weight_log', []);
@@ -1065,7 +1099,7 @@ function switchScreen(id) {
   if (id==='progress') renderProgress();
   if (id==='meals') renderMeals();
   if (id==='settings') renderSettingsExtras();
-  if (id==='scan') autoStartScanner();
+  if (id==='scan') { renderScanHistory(); autoStartScanner(); }
   window.scrollTo(0,0);
 }
 
@@ -1597,7 +1631,7 @@ async function startScanner() {
     scanDecoder = 'native';
     scanDiag.decoder = 'native BarcodeDetector';
     scanDiag.lastStage = 'decoding frames (native)';
-    document.getElementById('scan-status-txt').textContent = 'Hold steady over barcode…';
+    setScanStatus(null);
     v.srcObject = mediaStream;
     try { await v.play(); } catch(e) {}
     const det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e'] });
@@ -1617,7 +1651,7 @@ async function startScanner() {
     scanDecoder = 'zxing';
     scanDiag.decoder = 'zxing-canvas';
     scanDiag.lastStage = 'attaching stream';
-    document.getElementById('scan-status-txt').textContent = 'Hold steady over barcode…';
+    setScanStatus(null);
     v.srcObject = mediaStream;
     v.setAttribute('playsinline', 'true');
     v.muted = true;
@@ -1662,10 +1696,9 @@ async function startScanner() {
           if (code) { onScanHit(code); return; }
         } catch(e) { scanDiag.lastError = 'frame decode: ' + (e && e.message); }
         // Nudge the user if we've been looking a while with no hit.
-        if (scanFrames === 40) {
-          const st = document.getElementById('scan-status-txt');
-          if (st) st.textContent = 'Try moving closer, or fill the frame with the barcode';
-        }
+        // Nudge with concrete advice if nothing has read for a while.
+        if (scanFrames === 45) setScanStatus('Move closer — fill the box with the barcode');
+        if (scanFrames === 110) setScanStatus(null);
       }
       scanTimer = setTimeout(tick, 120);
     };
@@ -1686,14 +1719,31 @@ function onScanHit(raw) {
   const v = PointsEngine.validateBarcode(raw);
   if (!v.ok) {
     // Keep scanning — a misread frame shouldn't kill the session.
-    document.getElementById('scan-status-txt').textContent = 'Misread — hold steady…';
+    setScanStatus('Misread — hold steady…');
+    setTimeout(() => { if (scanning) setScanStatus(null); }, 1200);
     return;
   }
   lastCode = raw;
   if (navigator.vibrate) { try { navigator.vibrate(60); } catch(e) {} }
   flashScanFeedback();
-  document.getElementById('scan-status-txt').textContent = 'Got it — looking up…';
+  setScanStatus('Got it — looking up…');
   lookupBarcode(raw, { keepScanning: true });
+}
+
+// The status line either shows the live "Scanning …" indicator or a message.
+// A visibly animated indicator is what tells you the scanner is actually
+// working — static text looks identical to a hang, which is exactly how the
+// old broken build felt.
+function setScanStatus(msg) {
+  const el = document.getElementById('scan-status-txt');
+  if (!el) return;
+  el.innerHTML = msg
+    ? esc(msg)
+    : 'Scanning<span class="scanning-dots"><i></i><i></i><i></i></span>';
+}
+function showAimLabel(show) {
+  const a = document.getElementById('aim-label');
+  if (a) a.style.display = show ? 'block' : 'none';
 }
 
 // Brief visual confirmation, since the camera no longer closes to signal a hit.
@@ -1877,8 +1927,8 @@ async function lookupBarcode(code, opts){
   const mine = customProduct(code);
   if (mine) {
     hideToast();
-    showProduct(Object.assign({ custom:true, cats:'', image:null, evidence:{ packaged:true } }, mine));
-    if (opts.keepScanning) document.getElementById('scan-status-txt').textContent = 'Scan the next item';
+    showProduct(Object.assign({ custom:true, code, cats:'', image:null, evidence:{ packaged:true } }, mine));
+    if (opts.keepScanning) setScanStatus('Scan the next item');
     else switchScreen('scan');
     return;
   }
@@ -1896,6 +1946,7 @@ async function lookupBarcode(code, opts){
     // One path for every product source (scan, custom, manual) so the engine
     // and the packaged-product gate can never be bypassed by one of them.
     showProduct({
+      code,
       name:p.product_name||'Unknown',brand:p.brands||'',image:p.image_small_url||null,cats,
       cal:srv?n['energy-kcal_serving']:n['energy-kcal_100g'],
       sat:srv?n['saturated-fat_serving']:n['saturated-fat_100g'],
@@ -1911,7 +1962,7 @@ async function lookupBarcode(code, opts){
                  ingredientsText:p.ingredients_text||'' }
     });
     if (!opts.keepScanning) switchScreen('scan');
-    else document.getElementById('scan-status-txt').textContent = 'Scan the next item';
+    else { setScanStatus('Scan the next item'); setTimeout(() => { if (scanning) setScanStatus(null); }, 1800); }
   }catch(e){
     showToast(e && e.name === 'TimeoutError' ? 'Lookup timed out — check your connection' : 'Network error — try again','err');
   }
@@ -2040,12 +2091,53 @@ function saveAddedProduct(){
     DB.set('ww_custom_products', all);
   }
   document.getElementById('addprod-overlay').classList.remove('show');
-  showProduct(Object.assign({ custom:true, cats:'', image:null,
+  const savedCode = pendingBarcode;
+  showProduct(Object.assign({ custom:true, code:savedCode, cats:'', image:null,
     // Typed straight off the label, so treat it as a packaged product with no
     // processing evidence — it will be priced, never silently zeroed.
     evidence:{ packaged:true } }, rec));
   pendingBarcode = null;
   showToast('Saved — this barcode will resolve instantly from now on','ok');
+}
+
+// ── recently scanned ─────────────────────────────────────────────────────────
+// A short history of what you scanned, so a mis-tap or a second look doesn't
+// mean re-scanning the item.
+function scanHistory(){ return DB.get('ww_scan_history', []); }
+
+function recordScan(p, code){
+  if (!code) return;
+  let h = scanHistory().filter(x => x.code !== String(code));
+  h.unshift({ code:String(code), name:p.name, pts:p.pts, zero:p.zero===true,
+              servLabel:p.servLabel||'', at:Date.now() });
+  if (h.length > 15) h = h.slice(0, 15);
+  DB.set('ww_scan_history', h);
+  renderScanHistory();
+}
+
+function renderScanHistory(){
+  const wrap = document.getElementById('scan-history-wrap');
+  const list = document.getElementById('scan-history');
+  if (!wrap || !list) return;
+  const h = scanHistory();
+  if (!h.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  list.innerHTML = h.slice(0, 6).map((x,i) => `
+    <button class="hist-row" onclick="reopenScan(${i})">
+      <div style="flex:1;min-width:0">
+        <div class="hist-name">${esc(x.name)}</div>
+        <div class="hist-sub">${esc(x.servLabel||'')}${x.servLabel?' · ':''}${esc(x.code)}</div>
+      </div>
+      <div class="hist-pts ${x.zero?'zero':''}">${x.pts==null?'?':x.pts}</div>
+    </button>`).join('');
+}
+
+// Re-open a previous scan by looking the barcode up again (custom products and
+// cached values resolve instantly; anything else re-fetches).
+function reopenScan(i){
+  const x = scanHistory()[i];
+  if (!x) return;
+  lookupBarcode(x.code, { keepScanning: scanning });
 }
 
 // Shared by the lookup, the custom-product store and the manual add flow.
@@ -2062,6 +2154,7 @@ function showProduct(p){
   currentProduct.packagedGate = pr.packagedGate;
   currentQty = 1;
   renderProductResult();
+  if (p.code) recordScan(currentProduct, p.code);
   const el = document.getElementById('prod-result');
   if (el && el.scrollIntoView) el.scrollIntoView({ behavior:'smooth', block:'center' });
 }
