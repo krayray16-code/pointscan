@@ -1187,6 +1187,15 @@ function setManualWeekly(){
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+// Which browser on iPhone. They are ALL WebKit — Apple requires it — so they
+// share Safari's camera behaviour, but each has its own permission UI, so the
+// recovery instructions have to differ.
+const iosBrowser = !isIOS ? null
+  : /CriOS/i.test(navigator.userAgent) ? 'chrome'
+  : /FxiOS/i.test(navigator.userAgent) ? 'firefox'
+  : /EdgiOS/i.test(navigator.userAgent) ? 'edge'
+  : 'safari';
+
 let scanning = false, torchOn = false, mediaStream = null, scanTimer = null;
 let scanDecoder = null, scanFrames = 0;
 
@@ -1299,11 +1308,19 @@ document.addEventListener('DOMContentLoaded', () => {
 // Back camera, with graceful degradation. `exact` gives the rear camera on
 // phones; some tablets/desktops only satisfy `ideal` or nothing at all.
 async function acquireCameraStream() {
-  const attempts = [
-    { video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-    { video: true }
-  ];
+  // On iOS, put the constraint that CANNOT throw OverconstrainedError first:
+  // only the first getUserMedia call is guaranteed to still hold the user
+  // gesture, so a retry may be rejected outright. `ideal: environment` picks
+  // the rear camera on iPhone without ever hard-failing. Elsewhere, `exact`
+  // is a more reliable way to force the rear camera, so it goes first.
+  const rear = { ideal: 'environment' }, size = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  const attempts = isIOS
+    ? [ { video: Object.assign({ facingMode: rear }, size) },
+        { video: { facingMode: rear } },
+        { video: true } ]
+    : [ { video: Object.assign({ facingMode: { exact: 'environment' } }, size) },
+        { video: Object.assign({ facingMode: rear }, size) },
+        { video: true } ];
   let lastErr;
   for (const c of attempts) {
     try { return await navigator.mediaDevices.getUserMedia(c); }
@@ -1319,9 +1336,10 @@ async function acquireCameraStream() {
 function cameraErrorMessage(e) {
   const name = e && e.name || '';
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-    return isIOS
-      ? 'Camera blocked. Tap "aA" in the address bar → Website Settings → Camera → Allow, then reload.'
-      : 'Camera blocked. Tap the 🔒 icon in the address bar → Permissions → Camera → Allow, then try again.';
+    if (iosBrowser === 'chrome') return 'Camera blocked in Chrome. Check iPhone Settings → Chrome → Camera is ON, then reload. (Safari is the most reliable option on iPhone.)';
+    if (iosBrowser === 'firefox' || iosBrowser === 'edge') return 'Camera blocked. Check iPhone Settings → this browser → Camera is ON, then reload. (Safari is the most reliable option on iPhone.)';
+    if (iosBrowser === 'safari') return 'Camera blocked. Tap "aA" in the address bar → Website Settings → Camera → Allow, then reload. Also check iPhone Settings → Safari → Camera.';
+    return 'Camera blocked. Tap the 🔒 icon in the address bar → Permissions → Camera → Allow, then try again.';
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return 'No camera found — use manual entry below.';
   if (name === 'NotReadableError' || name === 'TrackStartError') return 'Camera is in use by another app — close it and try again.';
@@ -1336,24 +1354,33 @@ async function startScanner() {
     showPhotoFallback('Your browser doesn\'t allow live camera access.<br>Snap a photo of the barcode instead.');
     return;
   }
-
-  // If permission is already hard-denied, show recovery steps rather than a
-  // prompt that will never appear. (Unsupported on iOS — falls through.)
-  try {
-    if (navigator.permissions && navigator.permissions.query) {
-      const st = await navigator.permissions.query({ name: 'camera' });
-      if (st.state === 'denied') { showToast(cameraErrorMessage({ name: 'NotAllowedError' }), 'err'); return; }
-    }
-  } catch(e) { /* permissions API unsupported here — getUserMedia will prompt */ }
-
-  const useNative = await nativeDetectorUsable();
-  if (!useNative && !zxingReady()) {
+  // Sync guard only — see the gesture note below, nothing may await yet.
+  if (!('BarcodeDetector' in window) && !zxingReady()) {
     showToast('Scanner library still loading — check your connection', 'err');
     return;
   }
 
+  // CRITICAL (WebKit): getUserMedia must be reached while the user's tap is
+  // still the active user gesture. Every browser on iPhone is WebKit —
+  // including Chrome, Firefox and Edge, which Apple requires to use it — and
+  // awaiting anything first (a permissions query, a feature probe) can
+  // invalidate that activation, so the camera prompt never appears or the
+  // call is rejected. So the camera request goes out FIRST, synchronously,
+  // and everything else happens while it is in flight.
+  scanDiag.lastStage = 'requesting camera';
+  let streamPromise;
   try {
-    mediaStream = await acquireCameraStream();
+    streamPromise = acquireCameraStream();
+  } catch(e) {
+    scanDiag.lastError = 'sync gUM throw: ' + (e && e.message);
+    showToast(cameraErrorMessage(e), 'err');
+    return;
+  }
+
+  const useNative = await nativeDetectorUsable();
+
+  try {
+    mediaStream = await streamPromise;
   } catch(e) {
     scanDiag.lastError = (e && e.name) + ': ' + (e && e.message);
     scanDiag.lastStage = 'opening camera';
@@ -2268,6 +2295,7 @@ async function runScannerCheck() {
   L.push('build: 2025/2026 engine, canvas decoder');
   L.push('when: ' + new Date().toISOString());
   L.push('ua: ' + navigator.userAgent);
+  L.push('detected: ' + (isIOS ? 'iPhone/iPad, browser=' + iosBrowser + ' (all iOS browsers are WebKit)' : 'not iOS'));
   L.push('secure context (https): ' + (window.isSecureContext ? 'yes' : 'NO — camera will be blocked'));
   L.push('standalone/home-screen: ' + (navigator.standalone ? 'yes' : 'no'));
   L.push('ZXing library loaded: ' + (typeof ZXing !== 'undefined' ? 'yes' : 'NO — decoding impossible'));

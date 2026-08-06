@@ -38,7 +38,11 @@ const fails = [];
 const check = (c, l) => { if (c) console.log('  ✓ ' + l); else { fails.push(l); console.log('  ✗ ' + l); } };
 const errors = [];
 
-async function openIphone(videoFile) {
+const IOS_UAS = {
+  safari: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+  chrome: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.153 Mobile/15E148 Safari/604.1'
+};
+async function openIphone(videoFile, browserKind = 'safari') {
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
     args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
@@ -46,7 +50,7 @@ async function openIphone(videoFile) {
   });
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
-    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    userAgent: IOS_UAS[browserKind],
     permissions: ['camera']
   });
   const page = await ctx.newPage();
@@ -176,6 +180,43 @@ console.log('Phase A2 — decoder core and photo upload path:');
   // The progress spinner must not be left on screen
   check(!(await page.locator('#toast').evaluate(el => el.className.includes('show') && el.innerHTML.includes('spin-sm'))), 'no stuck loading spinner after photo decode');
 
+  await browser.close();
+}
+
+// ── Phase A3: Chrome on iPhone (WebKit under the hood, same as Safari) ──
+console.log('Phase A3 — Chrome on iPhone:');
+{
+  const { browser, page } = await openIphone('barcode.y4m', 'chrome');
+  check(await page.evaluate(() => /CriOS/.test(navigator.userAgent)), 'simulating Chrome on iPhone (CriOS)');
+  check(await page.evaluate(() => iosBrowser === 'chrome'), 'app identifies the browser as Chrome-on-iOS');
+  check(await page.evaluate(() => isIOS === true), 'Chrome on iPhone is still detected as iOS');
+  check(await page.evaluate(() => !('BarcodeDetector' in window)), 'no native detector (WebKit) — must use the canvas decoder');
+
+  // getUserMedia must be reached with the gesture still active: no await may
+  // precede it inside startScanner.
+  const order = await page.evaluate(async () => {
+    const seq = [];
+    const realGum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = (c) => { seq.push('getUserMedia'); return realGum(c); };
+    const realQuery = navigator.permissions && navigator.permissions.query
+      ? navigator.permissions.query.bind(navigator.permissions) : null;
+    if (realQuery) navigator.permissions.query = (d) => { seq.push('permissions.query'); return realQuery(d); };
+    startScanner();
+    await new Promise(r => setTimeout(r, 50));
+    return seq;
+  });
+  check(order[0] === 'getUserMedia', 'getUserMedia is the FIRST async call (user gesture preserved), got: ' + JSON.stringify(order));
+  check(!order.includes('permissions.query'), 'no permissions.query before opening the camera');
+
+  await page.waitForFunction(() => window.__scannedCode, null, { timeout: 25000 }).catch(() => {});
+  check(await page.evaluate(() => window.__scannedCode) === EXPECTED, 'Chrome on iPhone decodes the live barcode');
+  await page.waitForTimeout(600);
+  check((await page.locator('#pts-display').textContent()).trim() === '9', 'Chrome on iPhone prices the scan correctly');
+
+  // Chrome-specific permission guidance
+  const msg = await page.evaluate(() => cameraErrorMessage({ name: 'NotAllowedError' }));
+  check(/Chrome/.test(msg), 'blocked-camera message gives Chrome-specific steps');
+  check(!/aA/.test(msg), 'does not give Safari-only "aA" instructions to Chrome users');
   await browser.close();
 }
 
