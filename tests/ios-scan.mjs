@@ -102,6 +102,83 @@ console.log('Phase A — live decode (camera shows a real EAN-13):');
   await browser.close();
 }
 
+// ── Phase A2: decoder + photo path (the parts that failed on the real phone) ──
+console.log('Phase A2 — decoder core and photo upload path:');
+{
+  const { browser, page } = await openIphone('blank.y4m');
+
+  // The built-in Scanner Check renders a barcode and decodes it. This proves
+  // the decode core works on this browser independently of any camera.
+  await page.click('#nav-settings');
+  await page.click('text=Run Scanner Check');
+  await page.waitForFunction(() => {
+    const t = document.getElementById('scan-diag-out');
+    return t && t.textContent.includes('decoder self-test');
+  }, null, { timeout: 20000 }).catch(() => {});
+  const diag = await page.locator('#scan-diag-out').textContent();
+  check(/decoder self-test: PASS/.test(diag), 'built-in decoder self-test PASSES');
+  check(/ZXing library loaded: yes/.test(diag), 'diagnostics confirm ZXing is served (not a 404)');
+
+  // The decoder must also work when a video is ALREADY playing — the exact
+  // state that deadlocked ZXing's decodeFromStream on iOS.
+  const already = await page.evaluate(async () => {
+    const s = await navigator.mediaDevices.getUserMedia({ video: true });
+    const v = document.createElement('video');
+    v.setAttribute('playsinline','true'); v.muted = true; v.srcObject = s;
+    await v.play();
+    await new Promise(r => setTimeout(r, 800));
+    const wasPlaying = v.currentTime > 0 && !v.paused && v.readyState > 2;
+    // decode against an already-playing element — must not hang
+    const done = await Promise.race([
+      (async () => { try { decodeSourceMultiPass(v, v.videoWidth, v.videoHeight, LIVE_PASSES); } catch(e) {} return 'returned'; })(),
+      new Promise(r => setTimeout(() => r('HUNG'), 5000))
+    ]);
+    s.getTracks().forEach(t => t.stop());
+    return { wasPlaying, done };
+  });
+  check(already.wasPlaying === true, 'set up the iOS condition: video already playing');
+  check(already.done === 'returned', 'decoding an already-playing video returns (no deadlock)');
+
+  // Photo path: generate a real PNG barcode in-page, then upload it exactly
+  // as the file input would receive a photo.
+  const pngB64 = await page.evaluate((code) => {
+    const L={0:'0001101',1:'0011001',2:'0010011',3:'0111101',4:'0100011',5:'0110001',6:'0101111',7:'0111011',8:'0110111',9:'0001011'};
+    const G={0:'0100111',1:'0110011',2:'0011011',3:'0100001',4:'0011101',5:'0111001',6:'0000101',7:'0010001',8:'0001001',9:'0010111'};
+    const R={}; for (const k in L) R[k]=L[k].split('').map(c=>c==='0'?'1':'0').join('');
+    const P={0:'LLLLLL',1:'LLGLGG',2:'LLGGLG',3:'LLGGGL',4:'LGLLGG',5:'LGGLLG',6:'LGGGLL',7:'LGLGLG',8:'LGLGGL',9:'LGGLGL'};
+    let bits='101';
+    for (let i=0;i<6;i++) bits += (P[code[0]][i]==='L'?L[code[1+i]]:G[code[1+i]]);
+    bits+='01010';
+    for (let i=7;i<13;i++) bits += R[code[i]];
+    bits+='101';
+    const mod=4, quiet=20, W=bits.length*mod+quiet*2, H=260;
+    const c=document.createElement('canvas'); c.width=W; c.height=H;
+    const g=c.getContext('2d');
+    g.fillStyle='#fff'; g.fillRect(0,0,W,H);
+    g.fillStyle='#000';
+    for (let i=0;i<bits.length;i++) if (bits[i]==='1') g.fillRect(quiet+i*mod, 30, mod, 180);
+    return c.toDataURL('image/png').split(',')[1];
+  }, EXPECTED);
+
+  const fs = await import('fs');
+  const tmpPng = join(SCRATCH, 'photo-barcode.png');
+  fs.writeFileSync(tmpPng, Buffer.from(pngB64, 'base64'));
+
+  await page.click('#nav-scan');
+  await page.click('text=Camera trouble?');
+  await page.waitForTimeout(200);
+  await page.setInputFiles('#barcode-file-input', tmpPng);
+  await page.waitForFunction(() => window.__scannedCode, null, { timeout: 25000 }).catch(() => {});
+  const photoCode = await page.evaluate(() => window.__scannedCode);
+  check(photoCode === EXPECTED, `photo upload decoded locally (got ${photoCode})`);
+  await page.waitForTimeout(500);
+  check(await page.locator('#prod-result').evaluate(el => el.classList.contains('show')), 'photo path shows the product card');
+  // The progress spinner must not be left on screen
+  check(!(await page.locator('#toast').evaluate(el => el.className.includes('show') && el.innerHTML.includes('spin-sm'))), 'no stuck loading spinner after photo decode');
+
+  await browser.close();
+}
+
 // ── Phase B: camera lifecycle (blank camera, nothing to decode) ──
 console.log('Phase B — camera lifecycle (blank camera):');
 {

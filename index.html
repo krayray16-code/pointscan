@@ -715,6 +715,16 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;padd
       </div>
     </div>
 
+    <div class="settings-section-title">Scanner Check</div>
+    <div class="settings-card">
+      <div style="padding:14px;">
+        <div style="font-size:.78rem;color:var(--ink2);margin-bottom:10px;line-height:1.6">If the barcode scanner isn't working, run this and send the result — it shows exactly which part is failing.</div>
+        <button class="big-teal-btn" style="margin-top:0" onclick="runScannerCheck()">🔍 Run Scanner Check</button>
+        <pre id="scan-diag-out" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:10px;font-size:.7rem;line-height:1.6;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Menlo,monospace;color:var(--ink);"></pre>
+        <button id="scan-diag-copy" class="retake-btn" style="display:none;width:100%;margin-top:8px;" onclick="copyScannerCheck()">📋 Copy Result</button>
+      </div>
+    </div>
+
     <div class="settings-section-title" id="review-title" style="display:none">⚠️ Needs Review</div>
     <div class="settings-card" id="review-card" style="display:none">
       <div id="review-list"></div>
@@ -1178,7 +1188,7 @@ const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 let scanning = false, torchOn = false, mediaStream = null, scanTimer = null;
-let zxReader = null, scanDecoder = null;
+let scanDecoder = null, scanFrames = 0;
 
 function liveScanSupported() {
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
@@ -1203,6 +1213,65 @@ function zxingHints() {
   hints.set(ZXing.DecodeHintType.TRY_HARDER, true); // better in low light / at angles
   return hints;
 }
+
+// ── Core decoder ──────────────────────────────────────────────────────────
+// We deliberately do NOT use ZXing's browser helpers (decodeFromStream /
+// decodeFromImageUrl). Their video wrapper deadlocks on iOS: the promise that
+// gates decoding only resolves on a 'playing' event, but tryPlayVideo()
+// early-returns when the video is *already* playing — which is exactly what
+// happens on Safari with an autoplay+playsinline element. The result is a live
+// preview that never decodes a single frame. So we drive frames ourselves and
+// call only ZXing's pure decoding core, which has no lifecycle of its own.
+let zxCoreReader = null;
+function coreReader() {
+  if (!zxCoreReader) zxCoreReader = new ZXing.MultiFormatReader();
+  return zxCoreReader;
+}
+
+// Decode whatever has been drawn on a canvas. Throws NotFoundException when
+// there is no barcode — callers treat that as "keep looking".
+function decodeCanvas(canvas) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const w = canvas.width, h = canvas.height;
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const packed = new Int32Array(w * h);
+  for (let i = 0, p = 0; i < packed.length; i++, p += 4) {
+    packed[i] = (data[p] << 16) | (data[p + 1] << 8) | data[p + 2];
+  }
+  const source = new ZXing.RGBLuminanceSource(packed, w, h);
+  const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(source));
+  return coreReader().decode(bitmap, zxingHints());
+}
+
+// Draw a source (video frame or still image) into the scratch canvas,
+// optionally cropping to a centred region and scaling to a target width.
+const scanCanvas = document.createElement('canvas');
+function drawForDecode(src, srcW, srcH, cropRatio, targetW) {
+  const cw = Math.round(srcW * cropRatio), ch = Math.round(srcH * cropRatio);
+  const sx = Math.round((srcW - cw) / 2), sy = Math.round((srcH - ch) / 2);
+  const scale = Math.min(1, targetW / cw);
+  scanCanvas.width = Math.max(1, Math.round(cw * scale));
+  scanCanvas.height = Math.max(1, Math.round(ch * scale));
+  const ctx = scanCanvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(src, sx, sy, cw, ch, 0, 0, scanCanvas.width, scanCanvas.height);
+  return scanCanvas;
+}
+
+// Try a few crops/scales — a barcode may fill the frame or sit in the middle,
+// and downscaling often helps as much as upscaling.
+function decodeSourceMultiPass(src, srcW, srcH, passes) {
+  for (const p of passes) {
+    try {
+      const result = decodeCanvas(drawForDecode(src, srcW, srcH, p.crop, p.width));
+      if (result && result.getText) return result.getText();
+      if (result && result.text) return result.text;
+    } catch (e) { /* NotFound / checksum — try the next pass */ }
+  }
+  return null;
+}
+const LIVE_PASSES  = [{ crop: 1, width: 800 }, { crop: 0.65, width: 800 }, { crop: 0.45, width: 700 }];
+const PHOTO_PASSES = [{ crop: 1, width: 1000 }, { crop: 1, width: 640 }, { crop: 0.7, width: 1000 },
+                      { crop: 0.5, width: 900 }, { crop: 1, width: 1600 }];
 
 function showPhotoFallback(msg) {
   stopScanner();
@@ -1286,6 +1355,8 @@ async function startScanner() {
   try {
     mediaStream = await acquireCameraStream();
   } catch(e) {
+    scanDiag.lastError = (e && e.name) + ': ' + (e && e.message);
+    scanDiag.lastStage = 'opening camera';
     stopScanner();
     showToast(cameraErrorMessage(e), 'err');
     // A blocked/absent camera isn't recoverable in place — offer the photo path.
@@ -1312,6 +1383,8 @@ async function startScanner() {
 
   if (useNative) {
     scanDecoder = 'native';
+    scanDiag.decoder = 'native BarcodeDetector';
+    scanDiag.lastStage = 'decoding frames (native)';
     document.getElementById('scan-status-txt').textContent = 'Hold steady over barcode…';
     v.srcObject = mediaStream;
     try { await v.play(); } catch(e) {}
@@ -1326,24 +1399,65 @@ async function startScanner() {
     };
     tick();
   } else {
-    // ZXing path — this is what iPhones use. decodeFromStream attaches our
-    // existing stream to the video element (setting the playsinline/muted
-    // attributes iOS needs) and decodes frames continuously.
+    // ZXing path — this is what iPhones use. We attach the stream and run the
+    // frame loop ourselves (see decodeCanvas): ZXing's own decodeFromStream
+    // deadlocks on iOS and never decodes anything.
     scanDecoder = 'zxing';
+    scanDiag.decoder = 'zxing-canvas';
+    scanDiag.lastStage = 'attaching stream';
     document.getElementById('scan-status-txt').textContent = 'Hold steady over barcode…';
+    v.srcObject = mediaStream;
+    v.setAttribute('playsinline', 'true');
+    v.muted = true;
+    try { await v.play(); } catch(e) { /* already playing, or blocked — checked below */ }
+
+    // Wait for real frame dimensions; without them there is nothing to draw.
     try {
-      zxReader = new ZXing.BrowserMultiFormatReader(zxingHints(), 150);
-      zxReader.timeBetweenDecodingAttempts = 100;
-      zxReader.decodeFromStream(mediaStream, v, (result, err) => {
-        if (!scanning) return;
-        if (result && result.text) onScanHit(result.text);
-        // err is a NotFoundException on most frames — that's normal, ignore.
+      await new Promise((res, rej) => {
+        if (v.videoWidth > 0) return res();
+        let done = false;
+        const ok = () => { if (!done) { done = true; cleanup(); res(); } };
+        const cleanup = () => {
+          v.removeEventListener('loadedmetadata', ok);
+          v.removeEventListener('canplay', ok);
+          clearInterval(poll); clearTimeout(bail);
+        };
+        v.addEventListener('loadedmetadata', ok);
+        v.addEventListener('canplay', ok);
+        // Poll as well — on iOS the events can fire before we attach.
+        const poll = setInterval(() => { if (v.videoWidth > 0) ok(); }, 100);
+        const bail = setTimeout(() => { if (!done) { done = true; cleanup(); rej(new Error('no-frames')); } }, 8000);
       });
     } catch(e) {
+      scanDiag.lastError = 'no video frames within 8s';
+      scanDiag.lastStage = 'waiting for frames';
       stopScanner();
-      showToast('Scanner failed to start — try the photo option', 'err');
-      showPhotoFallback('Live scanning didn\'t start. Snap a photo of the barcode instead.');
+      showToast('Camera preview didn\'t start — try the photo option', 'err');
+      showPhotoFallback('The live camera didn\'t produce a picture on this device. Snap a photo of the barcode instead.');
+      return;
     }
+
+    scanFrames = 0;
+    const tick = () => {
+      if (!scanning) return;
+      if (v.videoWidth > 0 && v.readyState >= 2) {
+        scanFrames++;
+        scanDiag.frames = scanFrames;
+        scanDiag.videoSize = v.videoWidth + 'x' + v.videoHeight;
+        scanDiag.lastStage = 'decoding frames';
+        try {
+          const code = decodeSourceMultiPass(v, v.videoWidth, v.videoHeight, LIVE_PASSES);
+          if (code) { onScanHit(code); return; }
+        } catch(e) { scanDiag.lastError = 'frame decode: ' + (e && e.message); }
+        // Nudge the user if we've been looking a while with no hit.
+        if (scanFrames === 40) {
+          const st = document.getElementById('scan-status-txt');
+          if (st) st.textContent = 'Try moving closer, or fill the frame with the barcode';
+        }
+      }
+      scanTimer = setTimeout(tick, 120);
+    };
+    tick();
   }
 }
 
@@ -1384,12 +1498,8 @@ async function toggleTorch() {
 
 function stopScanner() {
   scanning = false;
+  scanFrames = 0;
   if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
-  if (zxReader) {
-    try { zxReader.stopContinuousDecode(); } catch(e) {}
-    try { zxReader.reset(); } catch(e) {} // also stops the stream's tracks
-    zxReader = null;
-  }
   if (mediaStream) { mediaStream.getTracks().forEach(t => { try { t.stop(); } catch(e) {} }); mediaStream = null; }
   const v = document.getElementById('scanner-video');
   if (v) { try { v.srcObject = null; } catch(e) {} }
@@ -1449,19 +1559,21 @@ async function decodePhoto() {
       await new Promise(res => { capturedImg.onload = res; capturedImg.onerror = res; });
     }
 
-    // Step 1: decode locally with ZXing — fast, offline, no API key.
+    // Step 1: decode locally — fast, offline, no API key. Uses the same
+    // canvas decoder as the live scanner (ZXing's decodeFromImageUrl is
+    // avoided for the same reason as decodeFromStream).
     showToast('<span class="spin-sm"></span>Reading barcode…');
-    if (zxingReady()) {
+    await new Promise(r => setTimeout(r, 0)); // let the toast paint first
+    if (zxingReady() && capturedImg.naturalWidth > 0) {
       try {
-        const codeReader = new ZXing.BrowserMultiFormatReader(zxingHints());
-        const zxResult = await codeReader.decodeFromImageUrl(document.getElementById('barcode-preview').src);
-        if (zxResult && zxResult.text) {
-          const code = zxResult.text;
+        const code = decodeSourceMultiPass(capturedImg, capturedImg.naturalWidth, capturedImg.naturalHeight, PHOTO_PASSES);
+        if (code) {
           retakePhoto();
+          hideToast();
           lookupBarcode(code);
           return;
         }
-      } catch (zxErr) { /* NotFoundException — fall through to the AI reader */ }
+      } catch (zxErr) { /* fall through to the AI reader */ }
     }
 
     if (!navigator.onLine) {
@@ -1502,6 +1614,7 @@ async function decodePhoto() {
 
     const code = data.barcode;
     retakePhoto();
+    hideToast();
     lookupBarcode(code);
 
   } catch(e) {
@@ -2140,6 +2253,112 @@ function deleteMeal(){
   showToast('Meal deleted','ok');
 }
 
+// ══ SCANNER DIAGNOSTICS ══════════════════════════════════════════════════════
+// Reports which stage of the scan pipeline works on THIS device. Exists because
+// scanner faults are device-specific and otherwise invisible from a bug report.
+const scanDiag = { lastError: null, lastStage: 'not started', frames: 0, videoSize: null, decoder: null };
+
+async function runScannerCheck() {
+  const out = document.getElementById('scan-diag-out');
+  const copyBtn = document.getElementById('scan-diag-copy');
+  out.style.display = 'block'; copyBtn.style.display = 'block';
+  out.textContent = 'Running…';
+  const L = [];
+  L.push('PointScan scanner check');
+  L.push('build: 2025/2026 engine, canvas decoder');
+  L.push('when: ' + new Date().toISOString());
+  L.push('ua: ' + navigator.userAgent);
+  L.push('secure context (https): ' + (window.isSecureContext ? 'yes' : 'NO — camera will be blocked'));
+  L.push('standalone/home-screen: ' + (navigator.standalone ? 'yes' : 'no'));
+  L.push('ZXing library loaded: ' + (typeof ZXing !== 'undefined' ? 'yes' : 'NO — decoding impossible'));
+  L.push('PointsEngine loaded: ' + (typeof PointsEngine !== 'undefined' ? 'yes' : 'NO'));
+  L.push('BarcodeDetector (native): ' + ('BarcodeDetector' in window ? 'yes' : 'no (expected on iPhone)'));
+  L.push('getUserMedia available: ' + (liveScanSupported() ? 'yes' : 'NO'));
+  L.push('online: ' + (navigator.onLine ? 'yes' : 'no'));
+
+  // Can the decoder read a barcode we render ourselves? Proves the decode core
+  // works on this device independently of the camera.
+  try {
+    const c = document.createElement('canvas');
+    c.width = 760; c.height = 320;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = '#000';
+    // Encode a known EAN-13 rather than trusting a hand-written bit string.
+    const code = '4006381333931';
+    const Lp = {0:'0001101',1:'0011001',2:'0010011',3:'0111101',4:'0100011',5:'0110001',6:'0101111',7:'0111011',8:'0110111',9:'0001011'};
+    const Gp = {0:'0100111',1:'0110011',2:'0011011',3:'0100001',4:'0011101',5:'0111001',6:'0000101',7:'0010001',8:'0001001',9:'0010111'};
+    const Rp = {}; for (const k in Lp) Rp[k] = Lp[k].split('').map(b => b === '0' ? '1' : '0').join('');
+    const par = {0:'LLLLLL',1:'LLGLGG',2:'LLGGLG',3:'LLGGGL',4:'LGLLGG',5:'LGGLLG',6:'LGGGLL',7:'LGLGLG',8:'LGLGGL',9:'LGGLGL'}[code[0]];
+    let bits = '101';
+    for (let i = 0; i < 6; i++) bits += (par[i] === 'L' ? Lp[code[1 + i]] : Gp[code[1 + i]]);
+    bits += '01010';
+    for (let i = 7; i < 13; i++) bits += Rp[code[i]];
+    bits += '101';
+    // Use only 80% of the width so there is a proper quiet zone either side —
+    // an edge-to-edge barcode is unreadable by design.
+    const mod = Math.max(2, Math.floor((c.width * 0.8) / bits.length));
+    const x0 = Math.floor((c.width - mod * bits.length) / 2);
+    for (let i = 0; i < bits.length; i++) if (bits[i] === '1') g.fillRect(x0 + i * mod, 40, mod, 240);
+    const t0 = performance.now();
+    const got = decodeSourceMultiPass(c, c.width, c.height, [{ crop: 1, width: 800 }]);
+    L.push('decoder self-test: ' + (got === '4006381333931' ? 'PASS (' + Math.round(performance.now() - t0) + 'ms)' : 'FAIL (got ' + got + ')'));
+  } catch (e) {
+    L.push('decoder self-test: ERROR ' + (e && e.message));
+  }
+
+  // Camera permission + a real frame from the actual camera.
+  let permState = 'unknown (Safari does not report it)';
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      permState = (await navigator.permissions.query({ name: 'camera' })).state;
+    }
+  } catch (e) {}
+  L.push('camera permission: ' + permState);
+
+  try {
+    const s = await acquireCameraStream();
+    const v = document.createElement('video');
+    v.setAttribute('playsinline', 'true'); v.muted = true; v.srcObject = s;
+    try { await v.play(); } catch (e) {}
+    const gotFrame = await new Promise(res => {
+      const started = Date.now();
+      const iv = setInterval(() => {
+        if (v.videoWidth > 0) { clearInterval(iv); res(true); }
+        else if (Date.now() - started > 6000) { clearInterval(iv); res(false); }
+      }, 100);
+    });
+    L.push('camera opened: yes');
+    L.push('camera frames: ' + (gotFrame ? 'yes (' + v.videoWidth + 'x' + v.videoHeight + ')' : 'NO — preview never produced a picture'));
+    const track = s.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    L.push('camera: ' + (track.label || 'unnamed') + ' | torch: ' + (caps.torch ? 'yes' : 'no'));
+    s.getTracks().forEach(t => t.stop());
+  } catch (e) {
+    L.push('camera opened: NO — ' + (e && e.name) + ': ' + (e && e.message));
+  }
+
+  L.push('last scan stage: ' + scanDiag.lastStage);
+  L.push('frames scanned in last session: ' + scanDiag.frames);
+  L.push('last scanner error: ' + (scanDiag.lastError || 'none'));
+  out.textContent = L.join('\n');
+}
+
+async function copyScannerCheck() {
+  const txt = document.getElementById('scan-diag-out').textContent;
+  try {
+    await navigator.clipboard.writeText(txt);
+    showToast('Copied ✓', 'ok');
+  } catch (e) {
+    // Clipboard API needs a user gesture / permission on iOS — fall back.
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showToast('Copied ✓', 'ok'); }
+    catch (e2) { showToast('Select the text above and copy manually', 'err'); }
+    document.body.removeChild(ta);
+  }
+}
+
 // ══ SETTINGS: PLAN TOGGLE + REVIEW LIST ══════════════════════════════════════
 function setPlan(p){
   if (p !== 'standard' && p !== 'diabetic') return;
@@ -2209,7 +2428,16 @@ function exportData() {
 
 // ══ TOAST ════════════════════════════════════════════════════════════════════
 let tTimer;
-function showToast(msg,type=''){const el=document.getElementById('toast');el.innerHTML=msg;el.className='show'+(type?' '+type:'');clearTimeout(tTimer);if(type)tTimer=setTimeout(hideToast,3000);}
+// Every toast auto-hides. Progress toasts ("Reading barcode…") used to have no
+// type and so never cleared — if the step that followed hung, the spinner sat
+// on screen forever and looked like the app was stuck loading.
+function showToast(msg,type=''){
+  const el=document.getElementById('toast');
+  el.innerHTML=msg;
+  el.className='show'+(type?' '+type:'');
+  clearTimeout(tTimer);
+  tTimer=setTimeout(hideToast,type?3000:15000);
+}
 function hideToast(){document.getElementById('toast').className='';}
 
 // ══ INIT ════════════════════════════════════════════════════════════════════
