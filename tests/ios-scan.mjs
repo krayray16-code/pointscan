@@ -95,8 +95,14 @@ console.log('Phase A — live decode (camera shows a real EAN-13):');
   // 140cal*0.0305 + 39g sugar*0.12 = 8.95 -> 9
   const pts = (await page.locator('#pts-display').textContent()).trim();
   check(pts === '9', 'scanned soda priced by the engine (9 pts, got ' + pts + ')');
-  check(await page.locator('#zero-msg').isHidden(), 'soda NOT flagged zero-point');
-  check(await page.evaluate(() => !document.getElementById('scanner-video').srcObject), 'camera released after successful scan');
+  // The note may now explain WHY a packaged product is priced; what must
+  // never appear is a claim that it is zero-point.
+  const sodaNote = (await page.locator('#zero-msg').textContent()) || '';
+  check(!/zero-point food/i.test(sodaNote), 'soda NOT flagged as a zero-point food');
+  check(await page.locator('.badge-zero').count() === 0, 'no ZERO badge on the soda');
+  // The camera deliberately stays live now so you can scan a run of items.
+  check(await page.evaluate(() => !!document.getElementById('scanner-video').srcObject), 'camera stays live after a successful scan');
+  await page.evaluate(() => stopScanner());
 
   // Logging it clears the card so the next visit reopens the camera
   await page.click('.prod-add .btn-primary');

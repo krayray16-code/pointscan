@@ -8,22 +8,22 @@ Invariant checked for every item: **zero points ⇒ matches a zero-point categor
 
 | Food | Serving | Old pts | New (standard) | New (diabetic) | Status | Flags |
 |---|---|---|---|---|---|---|
-| Apple (medium) | 1 medium (182g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 2 | unchanged | — |
-| Apple slices | 1 cup (109g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
+| Apple (medium) | 1 medium (182g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 3 | unchanged | — |
+| Apple slices | 1 cup (109g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 2 | unchanged | — |
 | Banana (medium) | 1 medium (118g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 3 | unchanged | — |
 | Strawberries | 1 cup (152g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
 | Blueberries | 1 cup (148g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 2 | unchanged | — |
-| Raspberries | 1 cup (123g) | 2 | 0 (zero: Fruits (whole, plain)) | 1 | CHANGED | — |
-| Blackberries | 1 cup (144g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
-| Orange (medium) | 1 medium (131g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
+| Raspberries | 1 cup (123g) | 2 | 0 (zero: Fruits (whole, plain)) | 2 | CHANGED | — |
+| Blackberries | 1 cup (144g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 2 | unchanged | — |
+| Orange (medium) | 1 medium (131g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 2 | unchanged | — |
 | Clementine | 1 fruit (74g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
 | Grapes | 1 cup (151g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 3 | unchanged | — |
 | Watermelon | 1 cup (152g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
-| Cantaloupe | 1 cup (160g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
+| Cantaloupe | 1 cup (160g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 2 | unchanged | — |
 | Pineapple | 1 cup (165g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 2 | unchanged | — |
 | Mango | 1 cup (165g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 3 | unchanged | — |
-| Peach (medium) | 1 medium (150g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
-| Pear (medium) | 1 medium (178g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 2 | unchanged | — |
+| Peach (medium) | 1 medium (150g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 2 | unchanged | — |
+| Pear (medium) | 1 medium (178g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 3 | unchanged | — |
 | Plum | 1 fruit (66g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
 | Kiwi | 1 fruit (69g) | 0 (zero) | 0 (zero: Fruits (whole, plain)) | 1 | unchanged | — |
 | Cherries | 1 cup (154g) | 5 | 0 (zero: Fruits (whole, plain)) | 3 | CHANGED | — |
@@ -66,7 +66,7 @@ Invariant checked for every item: **zero points ⇒ matches a zero-point categor
 | Green peas (steamed) | 1/2 cup (80g) | 2 | 0 (zero: Potatoes & starchy vegetables) | 1 | CHANGED | — |
 | Roasted vegetables | 1 cup (150g) | 2 | 0 (zero: Non-starchy vegetables, asks about add-ins) | 0 (zero) | CHANGED | asks about add-ins before logging |
 | Plain rolled oats (dry) | 1/2 cup (40g) | 4 | 0 (zero: Plain oats & oatmeal) | 4 | CHANGED | — |
-| Plain oatmeal (cooked) | 1 cup (234g) | 4 | 0 (zero: Plain oats & oatmeal) | 4 | CHANGED | — |
+| Plain oatmeal (cooked) | 1 cup (234g) | 4 | 0 (zero: Plain oats & oatmeal) | 5 | CHANGED | — |
 | Air-popped plain popcorn | 3 cups (24g) | 2 | 0 (zero: Air-popped plain popcorn) | 0 (zero) | CHANGED | review: Popcorn is zero ONLY when the name says air-popped; plain "popcorn" without that qualifier gets points. |
 | Egg (hard boiled) | 1 large (50g) | 0 (zero) | 0 (zero: Eggs) | 0 (zero) | unchanged | — |
 | Egg whites | 2 large (66g) | 0 (zero) | 0 (zero: Eggs) | 0 (zero) | unchanged | — |
@@ -125,8 +125,8 @@ Invariant checked for every item: **zero points ⇒ matches a zero-point categor
 | Hummus | 2 tbsp (30g) | 2 | 2 | 2 | unchanged | — |
 | Whole wheat bread | 1 slice (43g) | 2 | 2 | 2 | unchanged | — |
 | White bread | 1 slice (25g) | 2 | 2 | 2 | unchanged | — |
-| Sourdough bread | 1 slice (36g) | 3 | 2 | 2 | CHANGED | — |
-| Bagel (plain) | 1 medium (98g) | 8 | 7 | 7 | CHANGED | — |
+| Sourdough bread | 1 slice (36g) | 3 | 3 | 3 | unchanged | — |
+| Bagel (plain) | 1 medium (98g) | 8 | 8 | 8 | unchanged | — |
 | English muffin | 1 muffin (57g) | 4 | 4 | 4 | unchanged | — |
 | Flour tortilla (8-inch) | 1 tortilla (49g) | 4 | 4 | 4 | unchanged | — |
 | Corn tortilla | 2 small (52g) | 0 (zero) | 3 | 3 | CHANGED | — |
@@ -138,19 +138,19 @@ Invariant checked for every item: **zero points ⇒ matches a zero-point categor
 | Breakfast cereal (average) | 1 cup (40g) | 5 | 5 | 5 | unchanged | — |
 | Granola | 1/2 cup (61g) | 10 | 10 | 10 | unchanged | — |
 | Granola bar (oats & honey) | 1 bar (42g) | 7 | 7 | 7 | unchanged | — |
-| Pancakes | 2 medium (77g) | 6 | 5 | 5 | CHANGED | — |
+| Pancakes | 2 medium (77g) | 6 | 6 | 6 | unchanged | — |
 | Waffle | 1 waffle (75g) | 7 | 7 | 7 | unchanged | — |
 | Croissant | 1 medium (57g) | 9 | 9 | 9 | unchanged | — |
 | Blueberry muffin | 1 medium (113g) | 0 (zero) | 17 | 17 | CHANGED | — |
 | Glazed donut | 1 donut (60g) | 10 | 10 | 10 | unchanged | — |
-| Almonds | 1 oz (28g) | 5 | 4 | 4 | CHANGED | — |
+| Almonds | 1 oz (28g) | 5 | 5 | 5 | unchanged | — |
 | Walnuts | 1 oz (28g) | 6 | 6 | 6 | unchanged | — |
 | Cashews | 1 oz (28g) | 5 | 5 | 5 | unchanged | — |
 | Peanut butter | 2 tbsp (32g) | 6 | 6 | 6 | unchanged | — |
-| Almond butter | 2 tbsp (32g) | 6 | 5 | 5 | CHANGED | — |
+| Almond butter | 2 tbsp (32g) | 6 | 6 | 6 | unchanged | — |
 | Olive oil | 1 tbsp (14g) | 4 | 4 | 4 | unchanged | — |
 | Avocado | 1/2 fruit (100g) | 5 | 5 | 5 | unchanged | — |
-| Guacamole | 2 tbsp (30g) | 1 | 1 | 1 | unchanged | — |
+| Guacamole | 2 tbsp (30g) | 1 | 2 | 2 | CHANGED | — |
 | Mayonnaise | 1 tbsp (14g) | 3 | 3 | 3 | unchanged | — |
 | Ranch dressing | 2 tbsp (30g) | 5 | 5 | 5 | unchanged | — |
 | Balsamic vinaigrette | 2 tbsp (32g) | 3 | 3 | 3 | unchanged | — |
@@ -189,12 +189,12 @@ Invariant checked for every item: **zero points ⇒ matches a zero-point categor
 | Gravy | 1/4 cup (60g) | 1 | 1 | 1 | unchanged | — |
 | Pizza (cheese) | 1 slice (107g) | 9 | 9 | 9 | unchanged | — |
 | Cheeseburger | 1 burger (154g) | 14 | 13 | 13 | CHANGED | — |
-| Bean & cheese burrito | 1 burrito (198g) | 11 | 11 | 11 | unchanged | — |
-| Sushi roll (California) | 6 pieces (170g) | 8 | 7 | 7 | CHANGED | — |
+| Bean & cheese burrito | 1 burrito (198g) | 11 | 12 | 12 | CHANGED | — |
+| Sushi roll (California) | 6 pieces (170g) | 8 | 8 | 8 | unchanged | — |
 | Macaroni and cheese | 1 cup (198g) | 10 | 10 | 10 | unchanged | — |
-| Chicken caesar salad | 1 bowl (300g) | 14 | 13 | 13 | CHANGED | — |
+| Chicken caesar salad | 1 bowl (300g) | 14 | 14 | 14 | unchanged | — |
 | Chicken noodle soup | 1 cup (241g) | 2 | 2 | 2 | unchanged | review: All soups treated as processed (points) because broth/additions cannot be verified from a name. |
-| Beef chili | 1 cup (253g) | 8 | 7 | 7 | CHANGED | — |
+| Beef chili | 1 cup (253g) | 8 | 8 | 8 | unchanged | — |
 | Pad thai | 1 plate (300g) | 19 | 18 | 18 | CHANGED | — |
 | Fried rice | 1 cup (198g) | 10 | 10 | 10 | unchanged | — |
 | Egg & cheese sandwich | 1 sandwich (150g) | 0 (zero) | 12 | 12 | CHANGED | — |
@@ -202,7 +202,7 @@ Invariant checked for every item: **zero points ⇒ matches a zero-point categor
 | Chicken wrap | 1 wrap (250g) | 15 | 15 | 15 | unchanged | — |
 | Lasagna | 1 piece (250g) | 13 | 13 | 13 | unchanged | — |
 
-**36 item(s) changed** vs the old logic; **14 item(s) flagged** for review.
+**30 item(s) changed** vs the old logic; **14 item(s) flagged** for review.
 
 ## Flagged for review
 

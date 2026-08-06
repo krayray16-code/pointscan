@@ -93,7 +93,9 @@ await page.waitForTimeout(900);
 check((await page.locator('#prod-name').textContent()).includes('Italian Bread'), 'bread product looked up');
 const breadPts = (await page.locator('#pts-display').textContent()).trim();
 check(breadPts === '1', 'light bread = 1 pt, not 0 (got ' + breadPts + ')');
-check(await page.locator('#zero-msg').isHidden(), 'NO "Zero-point food!" badge on bread');
+const breadNote = (await page.locator('#zero-msg').textContent()) || '';
+check(!/zero-point food/i.test(breadNote), 'bread is NOT called a zero-point food');
+check(await page.locator('.badge-zero').count() === 0, 'no ZERO badge on the bread card');
 check((await page.locator('#pts-lbl').textContent()).trim() === 'WW Points', 'label reads "WW Points", not the retired PersonalPoints branding');
 // And it must not carry a zero badge into the day log either
 await page.click('.prod-add .btn-primary');

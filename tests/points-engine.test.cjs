@@ -268,7 +268,7 @@ ok(pts({ cal: 120, sat: 1, sug: 0, addedSug: 0, pro: 24, fib: 0 }) === 2, 'formu
 ok(pts({ cal: 0, sat: 0, sug: 0, addedSug: 0, pro: 0, fib: 0 }) === 0, 'formula: 0-calorie food = 0 pts');
 ok(pts({ cal: 152, sat: 1.4, sug: 0.2, addedSug: 0, pro: 1.8, fib: 1.4 }, 'Potato chips') === 5, 'potato chips ≈ 5 pts');
 
-// ── protein/fiber credit cap ──
+// ── fiber is not a subtractor, and the protein credit is capped ──
 // Regression: "Old Tyme Italian Bread" (a 647-style light bread — 40 cal,
 // ~7g fiber) scored 0.46 and displayed as 0, which the UI then badged as a
 // zero-point food. Bread is never zero-point; WW prices this at 1.
@@ -277,10 +277,19 @@ ok(pts({ cal: 152, sat: 1.4, sug: 0.2, addedSug: 0, pro: 1.8, fib: 1.4 }, 'Potat
   const r = E.calcPoints(bread, 'Italian Bread', 'en:cereals-and-potatoes en:breads', 'standard');
   ok(r.zero === false, 'light bread is NOT a zero-point food');
   ok(r.points === 1, 'high-fiber light bread = 1 pt, not 0 (got ' + r.points + ')');
-  ok(r.flags.includes('credit-capped'), 'capped credit is flagged');
-  // Same bread on the old uncapped math would have been 0:
-  const raw = 40 * 0.0305 + 1 * 0.12 - 2 * 0.098 - 7 * 0.098;
-  ok(Math.round(raw) === 0, 'sanity: uncapped formula really did round to 0');
+  // Crediting fiber (the old behaviour) dragged this to 0 and biased
+  // high-fiber foods a point low across the board.
+  const withFiber = 40 * 0.0305 + 1 * 0.12 - 2 * 0.098 - 7 * 0.098;
+  ok(Math.round(withFiber) === 0, 'sanity: crediting fiber really did round it to 0');
+  ok(E.calcPoints({ cal: 210, sat: 1, sug: 12, addedSug: 12, pro: 4, fib: 3 }, 'Honey nut cereal', '', 'standard').points === 8,
+    'high-fiber cereal is no longer a point low (8)');
+  // Deliberately a name that matches no zero-point category, so this measures
+  // the formula and not the classifier.
+  ok(E.calcPoints({ cal: 114, sat: 0.1, sug: 0.3, addedSug: 0, pro: 7.6, fib: 7.5 }, 'Zzq fiber product', '', 'standard').points === 3,
+    'fiber no longer suppresses a high-fiber pointed food (3)');
+  // The protein cap still prevents a very high-protein item hitting 0.
+  const lean = E.calcPoints({ cal: 60, sat: 0, sug: 0, addedSug: 0, pro: 25, fib: 0 }, 'Protein isolate shake mix xq', '', 'standard');
+  ok(lean.points >= 1 && lean.flags.includes('credit-capped'), 'protein credit is capped, not unbounded');
 
   // The cap must not disturb ordinary foods.
   ok(pts({ cal: 216, sat: 0.4, sug: 0.7, addedSug: 0, pro: 5, fib: 3.5 }, 'Brown rice') === 6, 'cap does not change brown rice (6)');

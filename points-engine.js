@@ -298,6 +298,31 @@
     { term: 'popcorn', note: 'Popcorn is zero ONLY when the name says air-popped; plain "popcorn" without that qualifier gets points.' }
   ];
 
+  /**
+   * Is a scanned packaged product plain enough to qualify as a whole food?
+   * Uses Open Food Facts signals:
+   *   nova   1 = unprocessed/minimally processed … 4 = ultra-processed
+   *   ingredientsN  a plain food has one or two ingredients ("potatoes", "salt")
+   * With no signal at all we deliberately say NO: for a barcode, a wrong zero
+   * silently eats someone's daily budget, while a wrong point or two is visible
+   * and correctable.
+   */
+  function isPlainPackagedFood(ev) {
+    var nova = ev.nova == null ? null : Number(ev.nova);
+    var n = ev.ingredientsN == null ? null : Number(ev.ingredientsN);
+
+    if (nova != null && nova >= 3) {
+      return { plain: false, reason: 'packaged and processed (NOVA ' + nova + ')' };
+    }
+    if (n != null && n > 2) {
+      return { plain: false, reason: 'packaged with ' + n + ' ingredients — not a plain single food' };
+    }
+    if (nova != null && nova <= 2) return { plain: true, reason: 'NOVA ' + nova };
+    if (n != null && n <= 2) return { plain: true, reason: n + ' ingredient(s)' };
+    return { plain: false,
+      reason: 'packaged product — could not verify it is a plain, unprocessed food' };
+  }
+
   function conditionalFor(hay) {
     for (var i = 0; i < CONDITIONAL_PREPARATIONS.length; i++) {
       if (matchAny(hay, CONDITIONAL_PREPARATIONS[i].match)) return CONDITIONAL_PREPARATIONS[i];
@@ -322,13 +347,32 @@
    * cats: space-joined Open Food Facts category tags (optional).
    * plan: 'standard' (default) or 'diabetic'.
    */
-  function zeroCheck(name, cats, plan) {
+  /**
+   * evidence (optional) describes a SCANNED PACKAGED product:
+   *   { packaged: true, nova: 1..4, ingredientsN: <count>, ingredientsText: '' }
+   * See isPlainPackagedFood for why this matters.
+   */
+  function zeroCheck(name, cats, plan, evidence) {
     plan = plan === PLAN_DIABETIC ? PLAN_DIABETIC : PLAN_STANDARD;
     if (!name || !String(name).trim()) {
       return { zero: false, category: null, categoryId: null, reason: 'no name' };
     }
     var hay = normalizeName(name);
     var hayCats = normalizeName(cats || '');
+
+    // 0) Packaged-product gate. A name-keyword match defaults to ZERO, which is
+    //    right for "banana" typed into search but BACKWARDS for a barcode: a
+    //    bag of Corn Pops matched "corn" and scored 0. Anything with a barcode
+    //    is a manufactured product, so for scans we require positive evidence
+    //    that it really is a plain whole food before granting zero. Blocking
+    //    "pops", "straws", "nuts"… one at a time never converges.
+    if (evidence && evidence.packaged) {
+      var plainness = isPlainPackagedFood(evidence);
+      if (!plainness.plain) {
+        return { zero: false, category: null, categoryId: null,
+          reason: plainness.reason, packagedGate: true };
+      }
+    }
 
     // 1) Processing/preparation check — runs FIRST so derivatives can never
     //    inherit zero points from a base-food keyword.
@@ -399,11 +443,17 @@
    * non-zero food — callers must surface that for review.
    *
    * Formula: closest published approximation of the proprietary WW Points
-   * algorithm. Driven by calories, saturated fat, added sugar (total sugars
-   * as fallback), protein, and fiber.
+   * algorithm — calories, saturated fat, added sugar (total sugars as
+   * fallback), and protein.
+   *
+   * Fiber is deliberately NOT a subtractor. An earlier version credited fiber
+   * at the same rate as protein, which is not part of the published
+   * approximation and biased results roughly a point LOW on high-fiber foods
+   * (cereal, beans, nuts) compared with the WW app. Fiber is still carried in
+   * the nutrition object and displayed, it just no longer reduces the score.
    */
-  function calcPoints(n, name, cats, plan) {
-    var zc = zeroCheck(name, cats, plan);
+  function calcPoints(n, name, cats, plan, evidence) {
+    var zc = zeroCheck(name, cats, plan, evidence);
     var flags = [];
     if (zc.zero) {
       return { points: 0, zero: true, category: zc.category,
@@ -426,15 +476,11 @@
     var base = (+n.cal * 0.0305)
       + ((+n.sat || 0) * 0.275)
       + (sugar * 0.12);
-    var credit = ((+n.pro || 0) * 0.098) + ((+n.fib || 0) * 0.098);
+    var credit = (+n.pro || 0) * 0.098;
 
-    // Cap the protein/fiber credit at half the calorie-driven base. Without a
-    // cap, high-fiber or high-protein processed foods can have their entire
-    // score cancelled out and land on 0 — which would wrongly present them as
-    // zero-point foods. (Real case: a 40-cal, 7g-fiber slice of light bread
-    // scored 0.46 -> "0". WW gives that bread 1 point.) WW's own algorithm
-    // likewise damps these credits rather than letting them run unbounded.
-    // Only the credit is capped; the calorie/fat/sugar side is untouched.
+    // Cap the protein credit at half the calorie-driven base, so a very
+    // high-protein item cannot have its whole score cancelled and land on 0 —
+    // which would wrongly read as a zero-point food.
     var CREDIT_CAP_RATIO = 0.5;
     if (credit > base * CREDIT_CAP_RATIO) {
       credit = base * CREDIT_CAP_RATIO;
@@ -443,7 +489,7 @@
 
     return { points: Math.max(0, Math.round(base - credit)), zero: false,
       category: zc.category, categoryId: zc.categoryId,
-      reason: zc.reason, flags: flags };
+      packagedGate: !!zc.packagedGate, reason: zc.reason, flags: flags };
   }
 
   // Barcode sanity: UPC-A(12)/EAN-13(13)/EAN-8(8) verified with the GS1
@@ -481,6 +527,7 @@
     REVIEW_NOTES: REVIEW_NOTES,
     zeroCheck: zeroCheck,
     calcPoints: calcPoints,
+    isPlainPackagedFood: isPlainPackagedFood,
     validateBarcode: validateBarcode
   };
 });

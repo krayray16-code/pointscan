@@ -14,9 +14,9 @@
      third-party request would otherwise leave iOS with no scanner at all.
      @zxing/library 0.19.1 — Apache-2.0, see vendor/zxing-LICENSE -->
 <script src="./vendor/zxing-0.19.1.min.js"></script>
-<script src="./points-engine.js?v=6"></script>
-<script src="./food-db.js?v=6"></script>
-<script src="./week-engine.js?v=6"></script>
+<script src="./points-engine.js?v=7"></script>
+<script src="./food-db.js?v=7"></script>
+<script src="./week-engine.js?v=7"></script>
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    PointScan design system
@@ -232,6 +232,7 @@ textarea.input{resize:none;min-height:86px;border-radius:var(--r-sm);line-height
 .reticle-box i:nth-child(2){top:-2px;right:-2px;border-left:0;border-bottom:0;border-radius:0 12px 0 0;}
 .reticle-box i:nth-child(3){bottom:-2px;left:-2px;border-right:0;border-top:0;border-radius:0 0 0 12px;}
 .reticle-box i:nth-child(4){bottom:-2px;right:-2px;border-left:0;border-top:0;border-radius:0 0 12px 0;}
+.reticle-box.hit{box-shadow:0 0 0 9999px rgba(6,10,12,.55), inset 0 0 0 3px #4fe3d3;transition:box-shadow .12s;}
 .reticle-line{position:absolute;left:8px;right:8px;height:2px;border-radius:2px;
   background:linear-gradient(90deg,transparent,#4fe3d3,transparent);animation:sweep 2s ease-in-out infinite;}
 @keyframes sweep{0%,100%{top:12%;opacity:.35}50%{top:86%;opacity:1}}
@@ -544,6 +545,7 @@ pre.diag{background:var(--surface-2);border:1px solid var(--border);border-radiu
           <div class="cam-hint">
             <span id="scan-status-txt">Hold steady over the barcode</span>
             <div style="display:flex;gap:8px;align-items:center;">
+              <button class="cam-round" id="zoom-btn" onclick="cycleZoom()" style="display:none" aria-label="Zoom">2×</button>
               <button class="cam-round" id="torch-btn" onclick="toggleTorch()" style="display:none" aria-label="Torch">🔦</button>
               <button class="cam-round" onclick="stopScanner()" aria-label="Stop">✕</button>
             </div>
@@ -936,6 +938,40 @@ pre.diag{background:var(--surface-2);border:1px solid var(--border);border-radiu
   </div>
 </div>
 
+<!-- Not-found: add a product yourself, keyed to its barcode -->
+<div class="overlay" id="addprod-overlay" onclick="closeAddProduct(event)">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="sheet-title">Add this product</div>
+    <div class="sheet-sub" id="addprod-sub">Not in the database yet — enter what the label says and it'll be remembered on this device.</div>
+    <div class="field">
+      <label class="label" for="ap-name">Product name</label>
+      <input class="input" type="text" id="ap-name" placeholder="e.g. Corn Pops" maxlength="80"/>
+    </div>
+    <div class="field">
+      <label class="label" for="ap-serving">Serving size (as on the label)</label>
+      <input class="input" type="text" id="ap-serving" placeholder="e.g. 1 cup (28g)" maxlength="40"/>
+    </div>
+    <div class="field row-2">
+      <div><label class="label" for="ap-cal">Calories</label><input class="input" type="number" id="ap-cal" inputmode="decimal" placeholder="150"/></div>
+      <div><label class="label" for="ap-sat">Sat fat (g)</label><input class="input" type="number" id="ap-sat" inputmode="decimal" placeholder="1"/></div>
+    </div>
+    <div class="field row-2">
+      <div><label class="label" for="ap-sug">Added sugar (g)</label><input class="input" type="number" id="ap-sug" inputmode="decimal" placeholder="12"/></div>
+      <div><label class="label" for="ap-pro">Protein (g)</label><input class="input" type="number" id="ap-pro" inputmode="decimal" placeholder="2"/></div>
+    </div>
+    <div class="field">
+      <label class="label" for="ap-fib">Fiber (g) — optional</label>
+      <input class="input" type="number" id="ap-fib" inputmode="decimal" placeholder="1"/>
+    </div>
+    <div style="font-size:.72rem;color:var(--ink-3);line-height:1.5;margin-bottom:12px">Added sugar is the "Includes Xg Added Sugars" line. If the label doesn't show it, use total sugars.</div>
+    <div class="sheet-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="saveAddedProduct()">Save &amp; use</button>
+      <button class="btn btn-ghost" onclick="closeAddProduct()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <script>
 // ══ STATE ══════════════════════════════════════════════════════════════════
@@ -951,7 +987,7 @@ let rolloverOn    = DB.get('ww_rollover', true);
 // The daily budget in effect on each date. Without this, changing your budget
 // would retroactively rewrite every past day's overflow.
 let budgetHistory = DB.get('ww_budget_history', {});
-const APP_VERSION = '2026.08.06-6';
+const APP_VERSION = '2026.08.06-7';
 let todayKey      = todayStr();
 let weekLog       = DB.get('ww_week_log', {});   // {dateKey: [{id,name,pts,qty,icon,source}]}
 let weightLog     = DB.get('ww_weight_log', []);
@@ -1040,9 +1076,6 @@ function switchScreen(id) {
 function autoStartScanner() {
   if (scanning) return;
   if (document.getElementById('photo-scanner').style.display === 'block') return;
-  // A just-scanned product is on screen waiting to be logged — reopening the
-  // camera over it would throw away the result the user is looking at.
-  if (document.getElementById('prod-result').classList.contains('show')) return;
   if (!liveScanSupported() || !DB.get('ww_camera_ok', false)) return;
   startScanner();
 }
@@ -1312,6 +1345,29 @@ const iosBrowser = !isIOS ? null
 
 let scanning = false, torchOn = false, mediaStream = null, scanTimer = null;
 let scanDecoder = null, scanFrames = 0;
+let zoomCaps = null, currentZoom = 1, digitalZoom = false;
+const DEFAULT_ZOOM = 2;
+
+async function applyZoom(z) {
+  if (!mediaStream || !zoomCaps) return;
+  const track = mediaStream.getVideoTracks()[0];
+  const step = zoomCaps.step || 0.1;
+  const clamped = Math.min(zoomCaps.max, Math.max(zoomCaps.min, Math.round(z / step) * step));
+  try {
+    await track.applyConstraints({ advanced: [{ zoom: clamped }] });
+    currentZoom = clamped;
+    const zb = document.getElementById('zoom-btn');
+    if (zb) zb.textContent = (Math.round(clamped * 10) / 10) + '×';
+  } catch (e) { /* device refused the zoom — leave it as-is */ }
+}
+
+// Cycle 1x -> 2x -> 3x -> 1x
+async function cycleZoom() {
+  if (!zoomCaps) return;
+  const next = currentZoom >= Math.min(3, zoomCaps.max) ? (zoomCaps.min || 1)
+             : Math.min(zoomCaps.max, currentZoom + 1);
+  await applyZoom(next);
+}
 
 function liveScanSupported() {
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
@@ -1393,6 +1449,9 @@ function decodeSourceMultiPass(src, srcW, srcH, passes) {
   return null;
 }
 const LIVE_PASSES  = [{ crop: 1, width: 800 }, { crop: 0.65, width: 800 }, { crop: 0.45, width: 700 }];
+// Without hardware zoom we lean on tighter centre crops, which is the software
+// equivalent of zooming and makes a distant barcode readable.
+const LIVE_PASSES_DIGITAL = [{ crop: 0.55, width: 900 }, { crop: 0.35, width: 800 }, { crop: 0.8, width: 800 }];
 const PHOTO_PASSES = [{ crop: 1, width: 1000 }, { crop: 1, width: 640 }, { crop: 0.7, width: 1000 },
                       { crop: 0.5, width: 900 }, { crop: 1, width: 1600 }];
 
@@ -1508,7 +1567,6 @@ async function startScanner() {
   }
 
   const v = document.getElementById('scanner-video');
-  document.getElementById('prod-result').classList.remove('show'); // clear previous result
   document.getElementById('video-wrap').classList.add('active');
   document.getElementById('scanner-idle').style.display = 'none';
   scanning = true;
@@ -1520,6 +1578,20 @@ async function startScanner() {
   const caps = track.getCapabilities ? track.getCapabilities() : {};
   const tb = document.getElementById('torch-btn');
   if (tb) tb.style.display = caps.torch ? 'block' : 'none'; // iOS Safari: no torch API
+
+  // Zoom in a little by default. A barcode fills far more of the frame at ~2x,
+  // which is why a dedicated scanner app feels so much easier to aim.
+  zoomCaps = caps.zoom || null;
+  const zb = document.getElementById('zoom-btn');
+  if (zb) zb.style.display = zoomCaps ? 'block' : 'none';
+  if (zoomCaps) {
+    const target = Math.min(zoomCaps.max, Math.max(zoomCaps.min, DEFAULT_ZOOM));
+    await applyZoom(target);
+  } else {
+    // No hardware zoom (common on iOS Safari) — crop tighter instead, which
+    // is the same idea done in software.
+    digitalZoom = true;
+  }
 
   if (useNative) {
     scanDecoder = 'native';
@@ -1586,7 +1658,7 @@ async function startScanner() {
         scanDiag.videoSize = v.videoWidth + 'x' + v.videoHeight;
         scanDiag.lastStage = 'decoding frames';
         try {
-          const code = decodeSourceMultiPass(v, v.videoWidth, v.videoHeight, LIVE_PASSES);
+          const code = decodeSourceMultiPass(v, v.videoWidth, v.videoHeight, digitalZoom ? LIVE_PASSES_DIGITAL : LIVE_PASSES);
           if (code) { onScanHit(code); return; }
         } catch(e) { scanDiag.lastError = 'frame decode: ' + (e && e.message); }
         // Nudge the user if we've been looking a while with no hit.
@@ -1602,20 +1674,34 @@ async function startScanner() {
 }
 
 // Single funnel for a successful read, so both decoders behave identically.
-let lastHit = 0;
+// The camera deliberately KEEPS RUNNING: a dedicated scanner lets you work
+// down a row of groceries without re-opening it for every item. Results land
+// in the card below the live view.
+let lastHit = 0, lastCode = null;
 function onScanHit(raw) {
   const now = Date.now();
-  if (now - lastHit < 1500) return; // debounce duplicate frames
+  if (now - lastHit < 1200) return;                 // debounce duplicate frames
+  if (raw === lastCode && now - lastHit < 6000) return; // don't re-log the same item
   lastHit = now;
   const v = PointsEngine.validateBarcode(raw);
   if (!v.ok) {
     // Keep scanning — a misread frame shouldn't kill the session.
-    document.getElementById('scan-status-txt').textContent = 'Misread — hold steady and try again…';
+    document.getElementById('scan-status-txt').textContent = 'Misread — hold steady…';
     return;
   }
+  lastCode = raw;
   if (navigator.vibrate) { try { navigator.vibrate(60); } catch(e) {} }
-  stopScanner();
-  lookupBarcode(raw);
+  flashScanFeedback();
+  document.getElementById('scan-status-txt').textContent = 'Got it — looking up…';
+  lookupBarcode(raw, { keepScanning: true });
+}
+
+// Brief visual confirmation, since the camera no longer closes to signal a hit.
+function flashScanFeedback() {
+  const box = document.querySelector('.reticle-box');
+  if (!box) return;
+  box.classList.add('hit');
+  setTimeout(() => box.classList.remove('hit'), 450);
 }
 
 async function toggleTorch() {
@@ -1651,6 +1737,9 @@ function stopScanner() {
   if (tb) { tb.style.display = 'none'; tb.innerHTML = '🔦 Torch'; tb.style.background = ''; tb.style.color = ''; }
   torchOn = false;
   scanDecoder = null;
+  zoomCaps = null; currentZoom = 1; digitalZoom = false;
+  const zb = document.getElementById('zoom-btn');
+  if (zb) { zb.style.display = 'none'; zb.textContent = '2×'; }
 }
 
 // Free the camera when the app is backgrounded (iOS suspends the stream and
@@ -1773,7 +1862,8 @@ function timeoutSignal(ms){
   try { return AbortSignal.timeout(ms); }
   catch(e){ const c=new AbortController(); setTimeout(()=>c.abort(),ms); return c.signal; }
 }
-async function lookupBarcode(code){
+async function lookupBarcode(code, opts){
+  opts = opts || {};
   code = String(code||'').trim();
   const v = PointsEngine.validateBarcode(code);
   if (!v.ok) {
@@ -1783,17 +1873,29 @@ async function lookupBarcode(code){
     showToast(msg, 'err');
     return;
   }
+  // A product you added yourself wins, and works offline.
+  const mine = customProduct(code);
+  if (mine) {
+    hideToast();
+    showProduct(Object.assign({ custom:true, cats:'', image:null, evidence:{ packaged:true } }, mine));
+    if (opts.keepScanning) document.getElementById('scan-status-txt').textContent = 'Scan the next item';
+    else switchScreen('scan');
+    return;
+  }
   if (!navigator.onLine) { showToast('No connection — reconnect to look up foods', 'err'); return; }
   showToast('<span class="spin-sm"></span>Looking up…');
   try{
-    const res=await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json?fields=product_name,brands,nutriments,serving_size,image_small_url,categories_tags`,
+    const res=await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json?fields=product_name,brands,nutriments,serving_size,image_small_url,categories_tags,nova_group,ingredients_n,ingredients_text`,
       { signal: timeoutSignal(10000) });
     const data=await res.json();
-    if(data.status!==1){showToast(`No match for ${code} — try Search instead`,'err');return;}
+    if(data.status!==1){ onProductNotFound(code); return; }
     const p=data.product,n=p.nutriments||{};
     const cats=(p.categories_tags||[]).join(' ');
     const srv=n['energy-kcal_serving']!=null;
-    currentProduct={
+    hideToast();
+    // One path for every product source (scan, custom, manual) so the engine
+    // and the packaged-product gate can never be bypassed by one of them.
+    showProduct({
       name:p.product_name||'Unknown',brand:p.brands||'',image:p.image_small_url||null,cats,
       cal:srv?n['energy-kcal_serving']:n['energy-kcal_100g'],
       sat:srv?n['saturated-fat_serving']:n['saturated-fat_100g'],
@@ -1801,18 +1903,15 @@ async function lookupBarcode(code){
       asug:srv?n['added-sugars_serving']:n['added-sugars_100g'],
       pro:srv?n['proteins_serving']:n['proteins_100g'],
       fib:srv?n['fiber_serving']:n['fiber_100g'],
-      servLabel:p.serving_size||(srv?'per serving':'per 100g'),srv
-    };
-    // Scanned products go through the exact same engine as everything else —
-    // zero-point rules and the processing check cannot be bypassed by scanning.
-    const pr=PointsEngine.calcPoints({cal:currentProduct.cal,sat:currentProduct.sat,sug:currentProduct.sug,addedSug:currentProduct.asug??null,pro:currentProduct.pro,fib:currentProduct.fib},currentProduct.name,currentProduct.cats,planType);
-    currentProduct.pts=pr.points;
-    currentProduct.zero=pr.zero;
-    currentProduct.category=pr.category;
-    currentProduct.conditional=pr.conditional;
-    currentProduct.prompt=pr.prompt;
-    currentQty=1; renderProductResult(); hideToast();
-    switchScreen('scan');
+      servLabel:p.serving_size||(srv?'per serving':'per 100g'),srv,
+      // Processing evidence — see PointsEngine.isPlainPackagedFood. A barcode
+      // means a manufactured product, so zero points require proof it is a
+      // plain whole food rather than merely the absence of a bad keyword.
+      evidence:{ packaged:true, nova:p.nova_group, ingredientsN:p.ingredients_n,
+                 ingredientsText:p.ingredients_text||'' }
+    });
+    if (!opts.keepScanning) switchScreen('scan');
+    else document.getElementById('scan-status-txt').textContent = 'Scan the next item';
   }catch(e){
     showToast(e && e.name === 'TimeoutError' ? 'Lookup timed out — check your connection' : 'Network error — try again','err');
   }
@@ -1839,12 +1938,18 @@ function renderProductResult(){
   const zmsg=document.getElementById('zero-msg');
   if (zero) {
     zmsg.style.display='block';
+    zmsg.className='note note-green';
     zmsg.innerHTML='✅ Zero-point food' + (p.category ? ' · ' + esc(p.category) : '');
+  } else if (p.packagedGate) {
+    zmsg.style.display='block';
+    zmsg.className='note note-grey';
+    zmsg.innerHTML=(p.evidence && p.evidence.nova >= 3)
+      ? 'Processed packaged food — never zero-point. Points calculated from the label.'
+      : 'Packaged product — Points calculated from the label.';
   } else if (pts===0) {
     zmsg.style.display='block';
-    zmsg.style.background='var(--bg)';
-    zmsg.style.color='var(--ink-2)';
-    zmsg.innerHTML='Rounds to 0 for this serving — not a zero-point food, so larger servings will add up';
+    zmsg.className='note note-grey';
+    zmsg.innerHTML='Rounds to 0 for this serving — not a zero-point food, so larger servings add up';
   } else {
     zmsg.style.display='none';
   }
@@ -1891,6 +1996,74 @@ function addScanToLog(){
   pushToLog({name:currentProduct.name,pts:currentProduct.pts,qty:currentQty,totalPts:pts,icon:'🛒',source:'scan',zero:currentProduct.zero===true,nutrition});
   showToast(`+${pts} pts added ✓`,'ok');
   clearScanResult();
+}
+
+// ══ PRODUCTS YOU ADD YOURSELF ════════════════════════════════════════════════
+// Open Food Facts is crowd-sourced and its US coverage is thinner than a
+// commercial database, so scans do miss. Rather than a dead end, the barcode
+// is remembered against nutrition you type once — the next scan of that item
+// resolves instantly and offline.
+function customProducts(){ return DB.get('ww_custom_products', {}); }
+function customProduct(code){ return customProducts()[String(code)] || null; }
+
+let pendingBarcode = null;
+function onProductNotFound(code){
+  pendingBarcode = code;
+  document.getElementById('addprod-sub').textContent =
+    'Barcode ' + code + ' isn\'t in the database. Enter what the label says and it\'ll be remembered on this device.';
+  ['ap-name','ap-serving','ap-cal','ap-sat','ap-sug','ap-pro','ap-fib'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  hideToast();
+  document.getElementById('addprod-overlay').classList.add('show');
+}
+function closeAddProduct(e){
+  if (e && e.target !== document.getElementById('addprod-overlay')) return;
+  document.getElementById('addprod-overlay').classList.remove('show');
+  pendingBarcode = null;
+}
+function saveAddedProduct(){
+  const num = id => { const v=parseFloat(document.getElementById(id).value); return isFinite(v)?v:0; };
+  const name = document.getElementById('ap-name').value.trim();
+  const cal  = parseFloat(document.getElementById('ap-cal').value);
+  if (!name) { showToast('Give the product a name','err'); return; }
+  if (!isFinite(cal)) { showToast('Calories are needed to work out Points','err'); return; }
+
+  const rec = {
+    name, brand:'', servLabel: document.getElementById('ap-serving').value.trim() || 'per serving',
+    cal, sat:num('ap-sat'), sug:num('ap-sug'), asug:num('ap-sug'), pro:num('ap-pro'), fib:num('ap-fib'),
+    addedAt: new Date().toISOString()
+  };
+  if (pendingBarcode) {
+    const all = customProducts();
+    all[String(pendingBarcode)] = rec;
+    DB.set('ww_custom_products', all);
+  }
+  document.getElementById('addprod-overlay').classList.remove('show');
+  showProduct(Object.assign({ custom:true, cats:'', image:null,
+    // Typed straight off the label, so treat it as a packaged product with no
+    // processing evidence — it will be priced, never silently zeroed.
+    evidence:{ packaged:true } }, rec));
+  pendingBarcode = null;
+  showToast('Saved — this barcode will resolve instantly from now on','ok');
+}
+
+// Shared by the lookup, the custom-product store and the manual add flow.
+function showProduct(p){
+  currentProduct = p;
+  const pr = PointsEngine.calcPoints(
+    { cal:p.cal, sat:p.sat, sug:p.sug, addedSug:p.asug??null, pro:p.pro, fib:p.fib },
+    p.name, p.cats||'', planType, p.evidence);
+  currentProduct.pts = pr.points;
+  currentProduct.zero = pr.zero;
+  currentProduct.category = pr.category;
+  currentProduct.conditional = pr.conditional;
+  currentProduct.prompt = pr.prompt;
+  currentProduct.packagedGate = pr.packagedGate;
+  currentQty = 1;
+  renderProductResult();
+  const el = document.getElementById('prod-result');
+  if (el && el.scrollIntoView) el.scrollIntoView({ behavior:'smooth', block:'center' });
 }
 
 // ══ SEARCH ══════════════════════════════════════════════════════════════════
@@ -2716,6 +2889,7 @@ function exportData() {
     appVersion: APP_VERSION,
     rollovers: rolloverOn,
     budgetHistory,
+    customProducts: customProducts(),
     dailyBudget,
     weeklyBudget,
     foodLog: weekLog,
